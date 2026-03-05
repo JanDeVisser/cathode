@@ -518,6 +518,45 @@ GenResult qbe_operator(QBEBinExpr const &expr, ResultType const &lhs, auto const
     NYI("QBE mapping for result operator `{}`", Operator_name(expr.op));
 }
 
+GenResult qbe_operator(QBEBinExpr const &expr, TaggedUnionType const &lhs, auto const &rhs, QBEContext &ctx)
+{
+    if (expr.op == Operator::LogicalOr) {
+        assert(is<TagValue>(expr.lhs.node));
+        auto const &payload { get<TagValue>(expr.lhs.node).payload_type };
+        assert(expr.rhs.ptype->compatible(payload) || expr.rhs.ptype->assignable_to(payload));
+        int  use_value = ++ctx.next_label;
+        int  use_alternative = ++ctx.next_label;
+        int  done = ++ctx.next_label;
+        auto ret = ILValue::local(++ctx.next_var, qbe_type(payload));
+        auto deref = TRY_DEREFERENCE(expr.lhs, ctx);
+        check_tagged_union(get<TagValue>(expr.lhs.node).tag_value, deref, lhs, use_alternative, use_value, ctx);
+        ctx.add_operation(LabelDef { use_alternative });
+        auto alternative = TRY_DEREFERENCE(expr.rhs, ctx);
+        ctx.add_operation(
+            CopyDef {
+                alternative.get_value(),
+                ret,
+            });
+        ctx.add_operation(
+            JmpDef {
+                done,
+            });
+        ctx.add_operation(LabelDef { use_value });
+        auto val = unwrap_tagged_union(expr.node, deref, ctx);
+        if (!val) {
+            return std::unexpected(val.error());
+        }
+        ctx.add_operation(
+            CopyDef {
+                val.value().get_value(),
+                ret,
+            });
+        ctx.add_operation(LabelDef { done });
+        return QBEOperand { expr.node, payload, ret };
+    }
+    NYI("QBE mapping for result operator `{}`", Operator_name(expr.op));
+}
+
 GenResult qbe_operator(QBEBinExpr const &expr, TypeType const &lhs, auto const &rhs, QBEContext &ctx)
 {
     if (expr.op == Operator::MemberAccess) {
@@ -558,11 +597,6 @@ GenResult qbe_operator(QBEBinExpr const &expr, EnumType const &lhs, TypeType con
         return QBEOperand { expr.node, expr.rhs.get_value() };
     }
     NYI("QBE mapping for type operator `{}`", Operator_name(expr.op));
-}
-
-GenResult qbe_operator(QBEBinExpr const &expr, TaggedUnionType const &lhs, auto const &rhs, QBEContext &ctx)
-{
-    NYI("QBE mapping for type operator `{}` (any)", Operator_name(expr.op));
 }
 
 GenResult qbe_operator(QBEBinExpr const &expr, QBEContext &ctx)

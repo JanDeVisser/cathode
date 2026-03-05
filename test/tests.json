@@ -24,5 +24,6 @@
   "23_return_result",
   "24_enum_tag",
   "25_tagged_union_literal",
-  "26_tagged_union_must"
+  "26_tagged_union_must",
+  "27_tagged_union_or"
 ]

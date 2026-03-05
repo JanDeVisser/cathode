@@ -9,7 +9,7 @@ struct Y {
 }
 
 public func main() i32 {
-    y: Y = { X.A { "quux" }, 42 }
+    y: Y = { X.A = "quux", 42 }
     s := must y.foo.A
     putln(s)
     i := y.foo.B || 12

@@ -685,6 +685,39 @@ static inline std::wstring_view name(ASTNode const &n)
         n->node);
 }
 
+struct Operand {
+    OperandType type;
+
+    Operand(TypeKind k);
+    Operand(PseudoType pseudo_type);
+    bool matches(ASTNode const &node, pType const &concrete, pType const &hint = nullptr) const;
+};
+
+struct BinaryOperator {
+    Operand     lhs;
+    Operator    op;
+    Operand     rhs;
+    OperandType result;
+
+    bool  matches(ASTNode const &node, pType const &concrete_lhs, pType const &concrete_rhs) const;
+    pType return_type(ASTNode const &node, pType const &lhs_type, pType const &rhs_type) const;
+};
+
+struct AssignOperator {
+    Operator assign_op;
+    Operator bin_op;
+};
+
+struct UnaryOperator {
+    Operator    op;
+    Operand     operand;
+    OperandType result;
+};
+
+extern std::vector<BinaryOperator>  binary_ops;
+extern std::vector<UnaryOperator>   unary_ops;
+extern std::map<Operator, Operator> assign_ops;
+
 void         dump(ASTNode const &node, std::wostream &os, int indent = 0);
 void         dump(ASTNodes const &nodes, std::wostream &os, int indent = 0);
 void         header(ASTNode const &node, std::wostream &os);

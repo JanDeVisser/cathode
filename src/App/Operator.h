@@ -96,39 +96,6 @@ enum class PseudoType {
 
 using OperandType = std::variant<TypeKind, PseudoType>;
 
-struct Operand {
-    OperandType type;
-
-    Operand(TypeKind k);
-    Operand(PseudoType pseudo_type);
-    bool matches(pType const &concrete, pType const &hint = nullptr) const;
-};
-
-struct BinaryOperator {
-    Operand     lhs;
-    Operator    op;
-    Operand     rhs;
-    OperandType result;
-
-    bool  matches(pType const &concrete_lhs, pType const &concrete_rhs) const;
-    pType return_type(pType const &lhs_type, pType const &rhs_type) const;
-};
-
-struct AssignOperator {
-    Operator assign_op;
-    Operator bin_op;
-};
-
-struct UnaryOperator {
-    Operator    op;
-    Operand     operand;
-    OperandType result;
-};
-
-extern std::vector<BinaryOperator>  binary_ops;
-extern std::vector<UnaryOperator>   unary_ops;
-extern std::map<Operator, Operator> assign_ops;
-
 extern char const *Operator_name(Operator op);
 
 }

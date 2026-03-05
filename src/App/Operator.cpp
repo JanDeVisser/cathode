@@ -5,6 +5,8 @@
  */
 
 #include <App/Operator.h>
+#include <App/Parser.h>
+#include <App/SyntaxNode.h>
 
 namespace Lia {
 
@@ -89,7 +91,7 @@ Operand::Operand(PseudoType pseudo_type)
 {
 }
 
-bool Operand::matches(pType const &concrete, pType const &hint) const
+bool Operand::matches(ASTNode const &node, pType const &concrete, pType const &hint) const
 {
     auto concrete_value_type = concrete->value_type();
     auto hint_value_type = (hint != nullptr) ? hint->value_type() : nullptr;
@@ -98,7 +100,7 @@ bool Operand::matches(pType const &concrete, pType const &hint) const
             [&concrete_value_type](TypeKind k) -> bool {
                 return concrete_value_type->is_a(k);
             },
-            [&hint_value_type, &concrete_value_type](PseudoType pseudo_type) -> bool {
+            [&hint_value_type, &concrete_value_type, &node](PseudoType pseudo_type) -> bool {
                 switch (pseudo_type) {
                 case PseudoType::Boolean:
                     return concrete_value_type == TypeRegistry::boolean;
@@ -116,6 +118,10 @@ bool Operand::matches(pType const &concrete, pType const &hint) const
                             },
                             [](ResultType const &result) -> pType {
                                 return result.success;
+                            },
+                            [&node](TaggedUnionType const &tagged_union) -> pType {
+                                assert(is<TagValue>(node));
+                                return TypeRegistry::the().referencing(get<TagValue>(node).payload_type);
                             },
                             [](auto const &) -> pType {
                                 UNREACHABLE();
@@ -137,21 +143,21 @@ bool Operand::matches(pType const &concrete, pType const &hint) const
         type);
 }
 
-bool BinaryOperator::matches(pType const &concrete_lhs, pType const &concrete_rhs) const
+bool BinaryOperator::matches(ASTNode const &node, pType const &concrete_lhs, pType const &concrete_rhs) const
 {
-    return lhs.matches(concrete_lhs, concrete_rhs) && rhs.matches(concrete_rhs, concrete_lhs);
+    return lhs.matches(node, concrete_lhs, concrete_rhs) && rhs.matches(node, concrete_rhs, concrete_lhs);
 }
 
-pType BinaryOperator::return_type(pType const &lhs_type, pType const &rhs_type) const
+pType BinaryOperator::return_type(ASTNode const &node, pType const &lhs_type, pType const &rhs_type) const
 {
     auto lhs_value_type = lhs_type->value_type();
-    auto rhs_value_type = rhs_type->value_type();
+    auto rhs_value_type = (rhs_type != nullptr) ? rhs_type->value_type() : nullptr;
     return std::visit(
         overloads {
             [](TypeKind const &t) -> pType {
                 UNREACHABLE();
             },
-            [&lhs_value_type, &rhs_value_type](PseudoType pseudo_type) -> pType {
+            [&lhs_value_type, &rhs_value_type, &node](PseudoType pseudo_type) -> pType {
                 switch (pseudo_type) {
                 case PseudoType::Boolean:
                     return TypeRegistry::boolean;
@@ -169,6 +175,10 @@ pType BinaryOperator::return_type(pType const &lhs_type, pType const &rhs_type) 
                             },
                             [](ResultType const &result) -> pType {
                                 return result.success;
+                            },
+                            [&node](TaggedUnionType const &tagged_union) -> pType {
+                                assert(is<TagValue>(node));
+                                return TypeRegistry::the().referencing(get<TagValue>(node).payload_type);
                             },
                             [](auto const &) -> pType {
                                 UNREACHABLE();

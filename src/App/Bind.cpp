@@ -381,10 +381,10 @@ BindResult bind(ASTNode n, BinaryExpression &impl)
             lhs_value_type->description, target_type->description);
     }
 
-    auto check_operators = [](Operator op, pType op_lhs_type, pType op_rhs_type) -> pType {
+    auto check_operators = [&impl](Operator op, pType op_lhs_type, pType op_rhs_type) -> pType {
         for (auto const &o : binary_ops) {
-            if (op == o.op && o.matches(op_lhs_type, op_rhs_type)) {
-                return o.return_type(op_lhs_type, op_rhs_type);
+            if (op == o.op && o.matches(impl.lhs, op_lhs_type, op_rhs_type)) {
+                return o.return_type(impl.lhs, op_lhs_type, op_rhs_type);
             }
         }
         return nullptr;
@@ -1008,7 +1008,7 @@ BindResult bind(ASTNode n, UnaryExpression &impl)
         return TypeRegistry::the().referencing(operand_type);
     }
     for (auto const &[oper, operand, result] : unary_ops) {
-        if (impl.op == oper && operand.matches(operand_type)) {
+        if (impl.op == oper && operand.matches(impl.operand, operand_type)) {
             return std::visit(
                 overloads {
                     [](TypeKind const &result_type) -> pType {

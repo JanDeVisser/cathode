@@ -1,0 +1,12 @@
+{
+  "name": "27_tagged_union_or",
+  "comptime_stdout": [],
+  "comptime_stderr": [],
+  "stdout": [
+    "quux",
+    "12"
+  ],
+  "stderr": [],
+  "exit": 0,
+  "args": []
+}

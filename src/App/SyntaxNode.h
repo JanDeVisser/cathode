@@ -115,6 +115,7 @@ struct ASTNode : public Ptr<struct ASTNodeImpl, Parser> {
     {
     }
 
+    size_t        value() const;
     TokenLocation operator+(ASTNode const &other);
     TokenLocation operator+(TokenLocation const &other);
     void          error(char const *message) const { error(std::string(message)); }
@@ -135,6 +136,7 @@ struct ASTNode : public Ptr<struct ASTNodeImpl, Parser> {
     }
 
     BindError bind_error(std::wstring const &message) const;
+    BindError bind_error(LiaError error) const;
     BindError bind_error(wchar_t const *message) const { return bind_error(std::wstring(message)); }
 
     template<typename... Args>
@@ -145,6 +147,7 @@ struct ASTNode : public Ptr<struct ASTNodeImpl, Parser> {
 };
 
 using ASTNodes = std::vector<ASTNode>;
+using NSNode = Ptr<struct Namespace>;
 
 struct Namespace {
     using VariableMap = std::map<std::wstring, ASTNode>;
@@ -153,13 +156,14 @@ struct Namespace {
     using FunctionIter = FunctionMap::iterator;
     using FunctionConstIter = FunctionMap::const_iterator;
 
+    NSNode      id;
+    ASTNode     node;
     TypeMap     types {};
     FunctionMap functions {};
     VariableMap variables {};
-    ASTNode     parent { nullptr };
+    NSNode      parent { nullptr };
 
-    explicit Namespace(ASTNode parent = nullptr);
-    ASTNode  parent_of() const;
+    explicit Namespace(ASTNode node, NSNode parent = nullptr);
     bool     is_registered(std::wstring const &name) const;
     pType    find_type(std::wstring const &name) const;
     ASTNode  current_function() const;
@@ -366,13 +370,12 @@ struct Parameter {
 };
 
 struct Program {
-    std::wstring                    name;
-    std::map<std::wstring, ASTNode> modules {};
-    std::wstring                    source;
-    ASTNodes                        statements;
+    std::wstring name;
+    std::wstring source;
+    ASTNodes     statements;
 
     Program(std::wstring name, std::wstring source);
-    Program(std::wstring name, std::map<std::wstring, ASTNode> modules, ASTNodes statements);
+    Program(std::wstring name, ASTNodes statements);
     Program(std::wstring name, std::wstring source, ASTNodes statements);
 };
 
@@ -582,15 +585,15 @@ using SyntaxNode = std::variant<Dummy,
 
 struct ASTNodeImpl {
     using NodeTag = std::variant<bool, int64_t, std::wstring, pType, ASTNode>;
-    TokenLocation            location {};
-    ASTStatus                status { ASTStatus::Initialized };
-    SyntaxNode               node {};
-    pType                    bound_type {};
-    std::optional<Namespace> ns {};
-    ASTNode                  id;
-    ASTNode                  supercedes;
-    ASTNode                  superceded_by;
-    NodeTag                  tag { false };
+    TokenLocation location {};
+    ASTStatus     status { ASTStatus::Initialized };
+    SyntaxNode    node {};
+    pType         bound_type {};
+    NSNode        ns { nullptr };
+    ASTNode       id;
+    ASTNode       supercedes;
+    ASTNode       superceded_by;
+    NodeTag       tag { false };
 
     template<class N, typename... Args>
     static ASTNodeImpl make(TokenLocation const &loc, Args... args)

@@ -153,7 +153,8 @@ void dump(ASTNode const &n, Program const &impl, std::wostream &os, int indent)
     for (auto const &stmt : impl.statements) {
         dump(stmt, os, indent + 4);
     }
-    for (auto &[_, mod] : impl.modules) {
+    auto &parser { *(n.repo) };
+    for (auto &[_, mod] : parser.modules) {
         dump(mod, os, indent + 4);
     }
 }
@@ -332,6 +333,12 @@ std::wstring to_string(ASTNode const &, N const &impl)
 }
 
 template<>
+std::wstring to_string(ASTNode const &n, Module const &impl)
+{
+    return impl.name;
+}
+
+template<>
 std::wstring to_string(ASTNode const &, Number const &impl)
 {
     return std::format(L"{} {}", impl.number, as_wstring(NumberType_name(impl.number_type)));
@@ -485,40 +492,17 @@ void dump(ASTNode const &node, std::wostream &os, int indent)
     }
     print_indent(os, indent);
     header(node, os);
-    os << std::endl;
     if (node->ns) {
-        print_indent(os, indent);
-        os << "{" << std::endl;
-        print_indent(os, indent + 4);
-        os << "parent: " << to_string(node->ns->parent) << std::endl;
-        for (auto const &[n, t] : node->ns->types) {
-            print_indent(os, indent + 4);
-            os << n << ": " << t->to_string() << "\n";
+        os << " || ns "
+           << node->ns.id.value();
+        if (node->ns->parent) {
+            os << "<-" << node->ns->parent.id.value();
         }
-        for (auto const &[n, overloads] : node->ns->functions) {
-            for (auto const &f : overloads) {
-                print_indent(os, indent + 4);
-                os << n;
-                auto const def = get<FunctionDefinition>(f);
-                if (def.declaration->bound_type) {
-                    os << ": " << def.declaration->bound_type->name;
-                }
-                os << "\n";
-            }
-        }
-        for (auto const &[n, v] : node->ns->variables) {
-            print_indent(os, indent + 4);
-            os << n;
-            if (v->bound_type != nullptr) {
-                os << ": " << v->bound_type->name;
-            } else {
-                os << "(unbound)";
-            }
-            os << "\n";
-        }
-        print_indent(os, indent);
-        os << "}" << std::endl;
+        os << ' ' << node->ns->types.size() << "/"
+           << node->ns->functions.size() << "/"
+           << node->ns->variables.size();
     }
+    os << std::endl;
     std::visit(
         [&node, &indent, &os](auto const &impl) {
             dump(node, impl, os, indent);

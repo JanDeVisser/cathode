@@ -202,7 +202,9 @@ ASTNode stamp(ASTNode n)
     if (n == nullptr) {
         return nullptr;
     }
-    if (n->ns.has_value()) {
+    auto  &parser { *(n.repo) };
+    size_t stack_size { parser.namespaces.size() };
+    if (n->ns != nullptr) {
         n.repo->push_namespace(n);
     }
     ASTNode ret = std::visit(
@@ -211,8 +213,8 @@ ASTNode stamp(ASTNode n)
             return stamp<decltype(impl)>(ret, std::get<decltype(impl)>(ret->node));
         },
         n->node);
-    if (n->ns.has_value()) {
-        n.repo->pop_namespace();
+    while (parser.namespaces.size() > stack_size) {
+        n.repo->pop_namespace(n);
     }
     return ret;
 }

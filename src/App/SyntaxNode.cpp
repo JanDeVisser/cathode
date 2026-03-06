@@ -40,6 +40,11 @@ char const *SyntaxNodeType_name(SyntaxNodeType type)
     }
 }
 
+size_t ASTNode::value() const
+{
+    return repo->hunt(*this);
+}
+
 TokenLocation ASTNode::operator+(ASTNode const &other)
 {
     assert(*this && other);
@@ -68,13 +73,20 @@ BindError ASTNode::bind_error(std::wstring const &msg) const
     return repo->bind_error((*this)->location, msg);
 }
 
+BindError ASTNode::bind_error(LiaError error) const
+{
+    return repo->bind_error(std::move(error));
+}
+
 void ASTNodeImpl::init_namespace()
 {
-    ns = Namespace {};
-    if (!id.repo->namespaces.empty()) {
-        ns->parent = id.repo->namespaces.back();
+    Parser &parser = *(id.repo);
+    NSNode  parent { nullptr };
+    if (!parser.namespaces.empty()) {
+        parent = parser.namespaces.back();
     }
-    id.repo->push_namespace(id);
+    ns = NSNode { &parser.namespace_nodes, id, parent };
+    parser.push_namespace(id);
 }
 
 Block::Block(ASTNodes statements)
@@ -192,8 +204,8 @@ Call::Call(ASTNode callable, ASTNode args)
     : callable(std::move(callable))
     , arguments(std::move(args))
 {
-    if (!is<Identifier>(this->callable) && !is<StampedIdentifier>(this->callable)) {
-        NYI("Callable must be a function name");
+    if (!is<Identifier>(this->callable) && !is<StampedIdentifier>(this->callable) && !is<ExpressionList>(this->callable)) {
+        NYI("Callable must be a function name, not a {}", SyntaxNodeType_name(this->callable->type()));
     }
     assert(this->arguments != nullptr);
 }
@@ -259,9 +271,8 @@ Program::Program(std::wstring name, std::wstring source)
 {
 }
 
-Program::Program(std::wstring name, std::map<std::wstring, ASTNode> modules, ASTNodes statements)
+Program::Program(std::wstring name, ASTNodes statements)
     : name(std::move(name))
-    , modules(std::move(modules))
     , statements(std::move(statements))
 {
 }

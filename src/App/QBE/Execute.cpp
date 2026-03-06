@@ -468,19 +468,39 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, CallDef const &ins
     if (auto colon = instruction.name.rfind(L':'); colon != std::wstring_view::npos) {
         return native_call(il, frame, instruction);
     }
-    for (auto const &fnc : frame->file.functions) {
-        std::vector<QBEValue> args;
-        for (auto const &arg : instruction.args) {
-            args.push_back(get(frame, arg));
-        }
-        if (fnc.name == instruction.name) {
-            if (auto res = execute_qbe(frame->vm, frame->file, fnc, args); !res.has_value()) {
-                return std::unexpected(ExecError { res.error() });
-            } else {
-                assign(frame, instruction.target, res.value());
+
+    std::vector<QBEValue> args;
+    for (auto const &arg : instruction.args) {
+        args.push_back(get(frame, arg));
+    }
+
+    auto find_and_execute = [&instruction, &frame, &args](auto const &file) -> ExecResult {
+        for (auto const &fnc : file.functions) {
+            if (fnc.name == instruction.name) {
+                if (auto res = execute_qbe(frame->vm, frame->file, fnc, args); !res.has_value()) {
+                    return std::unexpected(ExecError { res.error() });
+                } else {
+                    assign(frame, instruction.target, res.value());
+                }
+                ++frame->ip;
+                return instruction.target;
             }
-            ++frame->ip;
-            return instruction.target;
+        }
+        return std::unexpected(ExecError {});
+    };
+
+    if (auto res = find_and_execute(frame->file); res) {
+        return res.value();
+    } else if (!std::holds_alternative<ExecError>(res.error())
+        || !std::get<ExecError>(res.error()).message.empty()) {
+        return std::unexpected(res.error());
+    }
+    for (auto const &file : frame->vm.program.files) {
+        if (auto res = find_and_execute(file); res) {
+            return res.value();
+        } else if (!std::holds_alternative<ExecError>(res.error())
+            || !std::get<ExecError>(res.error()).message.empty()) {
+            return std::unexpected(res.error());
         }
     }
     fatal(L"Function `{}` not found", instruction.name);

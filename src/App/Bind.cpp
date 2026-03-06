@@ -88,7 +88,7 @@ static BindResults bind_nodes(ASTNodes nodes)
 
 static BindResult bind_declaration(ASTNode declaration, ASTNode definition)
 {
-    assert(definition->ns.has_value());
+    assert(definition->ns != nullptr);
     if (declaration->status == ASTStatus::Normalized) {
         for (auto const &generic_param : get<FunctionDeclaration>(declaration).generics) {
             auto generic_id = get<Identifier>(generic_param);
@@ -114,7 +114,7 @@ static ASTNode instantiate(ASTNode n, std::map<std::wstring, pType> const &gener
     ASTNode new_func = make_node<FunctionDefinition>(n, this_def.name);
     new_func->init_namespace();
     {
-        Defer _ { [&n, &parser]() { parser.pop_namespace(); } };
+        Defer _ { [&n, &parser]() { parser.pop_namespace(n); } };
         for (auto const &[name, type] : generic_args) {
             new_func->ns->register_type(name, TypeRegistry::the().alias_for(type));
         }
@@ -445,17 +445,34 @@ BindResult bind(ASTNode n, Call &impl)
         return result;
     }
 
-    auto         arg_types = try_bind(impl.arguments);
-    auto const  &type_descr = get<TypeList>(arg_types);
-    auto        &args { get<ExpressionList>(impl.arguments).expressions };
-    std::wstring name;
-    ASTNodes     type_args {};
+    auto                      arg_types = try_bind(impl.arguments);
+    auto const               &type_descr = get<TypeList>(arg_types);
+    auto                     &args { get<ExpressionList>(impl.arguments).expressions };
+    std::wstring              name;
+    std::vector<std::wstring> names;
+    ASTNodes                  type_args {};
     if (auto const *id = get_if<Identifier>(impl.callable); id != nullptr) {
         name = id->identifier;
+        names = { name };
     } else if (auto const &stamped_id = get_if<StampedIdentifier>(impl.callable); stamped_id != nullptr) {
         name = stamped_id->identifier;
         type_args = stamped_id->arguments;
+        names = { name };
+    } else if (is<ExpressionList>(impl.callable)) {
+        auto const &callable { get<ExpressionList>(impl.callable) };
+        std::ranges::for_each(
+            callable.expressions | std::views::enumerate,
+            [&name, &names](auto const &expr) {
+                auto const &[ix, id] = expr;
+                if (ix > 0) {
+                    name += '.';
+                }
+                auto &n { get<Identifier>(id).identifier };
+                name += n;
+                names.emplace_back(n);
+            });
     }
+
     // function = parser.find_function_by_arg_list(id->identifier, arg_types);
     // if (function != nullptr) {
     //     return std::get<FunctionType>(function->bound_type->description).result;
@@ -544,7 +561,7 @@ BindResult bind(ASTNode n, Call &impl)
 
     ASTNodes bound_overloads;
     {
-        auto const overloads = parser.find_overloads(name, type_args);
+        auto const overloads = parser.find_overloads(names, type_args);
         for (auto func_def : overloads) {
             if (func_def->status == ASTStatus::Initialized) {
                 func_def = normalize(func_def);
@@ -834,10 +851,10 @@ BindResult bind(ASTNode n, FunctionDefinition &impl)
     auto t = (impl.declaration)->bound_type;
     assert(is<FunctionType>(t));
     if (register_me) {
-        if (auto const &found = n->ns->parent_of()->ns->find_function(impl.name, t); found != nullptr && found != n) {
+        if (auto const &found = n->ns->parent->find_function(impl.name, t); found != nullptr && found != n) {
             return n.bind_error(L"Duplicate overload for function `{}` with type `{}`", impl.name, t);
         }
-        n->ns->parent_of()->ns->register_function(impl.name, n);
+        n->ns->parent->register_function(impl.name, n);
     }
     auto &decl = get<FunctionDeclaration>(impl.declaration);
     if (!decl.generics.empty()) {
@@ -916,12 +933,12 @@ BindResult bind(ASTNode n, Program &impl)
     auto &parser { *(n.repo) };
     pType ret { nullptr };
     if (parser.pass == 0) {
-        for (auto &[name, mod] : impl.modules) {
+        for (auto &[name, mod] : parser.modules) {
             n->ns->register_variable(name, mod);
         }
     }
     try_bind_nodes(impl.statements);
-    try_bind_nodes(impl.modules | std::ranges::views::values);
+    try_bind_nodes(parser.modules | std::ranges::views::values);
     return TypeRegistry::void_;
 }
 
@@ -1130,7 +1147,8 @@ BindResult bind(ASTNode node)
     } else if (node->status > ASTStatus::Bound) {
         return BindError { node->status };
     } else { // node->status < ASTStatus::Bound) {
-        if (node->ns.has_value()) {
+        size_t stack_size = parser.namespaces.size();
+        if (node->ns != nullptr) {
             parser.push_namespace(node);
         }
         parser.node_stack.emplace_back(node);
@@ -1151,8 +1169,8 @@ BindResult bind(ASTNode node)
             },
             node->node);
         parser.node_stack.pop_back();
-        if (node->ns.has_value()) {
-            parser.pop_namespace();
+        while (stack_size < parser.namespaces.size()) {
+            parser.pop_namespace(node);
         }
         if (retval.has_value()) {
             auto const &type = retval.value();

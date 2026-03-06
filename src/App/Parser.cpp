@@ -4,8 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 
+// #define DEBUG_NAMESPACE_STACK
+
 #include <algorithm>
 #include <cstddef>
+#ifdef DEBUG_NAMESPACE_STACK
+#include <ranges>
+#endif
 #include <optional>
 #include <string_view>
 
@@ -113,18 +118,26 @@ bool Parser::empty() const
 
 ASTNodeImpl const &Parser::operator[](size_t ix) const
 {
-    while (nodes[ix].superceded_by != nullptr) {
-        ix = nodes[ix].superceded_by.id.value();
-    }
-    return nodes[ix];
+    return nodes[hunt(ix)];
 }
 
 ASTNodeImpl &Parser::operator[](size_t ix)
 {
+    return nodes[hunt(ix)];
+}
+
+size_t Parser::hunt(size_t ix) const
+{
     while (nodes[ix].superceded_by != nullptr) {
         ix = nodes[ix].superceded_by.id.value();
     }
-    return nodes[ix];
+    return ix;
+}
+
+size_t Parser::hunt(ASTNode const &n) const
+{
+    assert(n.id.has_value());
+    return hunt(n.id.value());
 }
 
 Parser::Token Parser::parse_statements(ASTNodes &statements)
@@ -1056,6 +1069,7 @@ ASTNode Parser::parse_import()
         auto ident_maybe = lexer.expect_identifier();
         if (!ident_maybe.has_value()) {
             append(ident_maybe.error(), "Expected import path component");
+            return {};
         }
         path += text_of(ident_maybe);
         end_location = ident_maybe.value().location;
@@ -1325,88 +1339,111 @@ BindResult Parser::bind(ASTNode node)
 
 pType Parser::type_of(std::wstring const &name) const
 {
-    assert(!namespaces.empty() && namespaces.back()->ns);
-    return namespaces.back()->ns->type_of(name);
+    assert(!namespaces.empty());
+    return namespaces.back()->type_of(name);
 }
 
 bool Parser::has_function(std::wstring const &name, pType const &type) const
 {
-    assert(!namespaces.empty() && namespaces.back()->ns);
-    return namespaces.back()->ns->find_function(name, type) != nullptr;
+    assert(!namespaces.empty());
+    return namespaces.back()->find_function(name, type) != nullptr;
 }
 
 ASTNode Parser::find_function(std::wstring const &name, pType const &type) const
 {
     assert(is<FunctionType>(type));
-    assert(!namespaces.empty() && namespaces.back()->ns);
-    return namespaces.back()->ns->find_function(name, type);
+    assert(!namespaces.empty());
+    return namespaces.back()->find_function(name, type);
 }
 
 ASTNode Parser::find_function_by_arg_list(std::wstring const &name, pType const &type) const
 {
     assert(is<TypeList>(type));
-    assert(!namespaces.empty() && namespaces.back()->ns);
-    return namespaces.back()->ns->find_function_by_arg_list(name, type);
+    assert(!namespaces.empty());
+    return namespaces.back()->find_function_by_arg_list(name, type);
 }
 
 ASTNodes Parser::find_overloads(std::wstring const &name, ASTNodes const &type_args) const
 {
-    assert(!namespaces.empty() && namespaces.back()->ns);
-    return namespaces.back()->ns->find_overloads(name, type_args);
+    assert(!namespaces.empty());
+    return namespaces.back()->find_overloads(name, type_args);
+}
+
+ASTNodes Parser::find_overloads(std::vector<std::wstring> const &names, ASTNodes const &type_args) const
+{
+    assert(!namespaces.empty());
+    assert(!names.empty());
+    switch (names.size()) {
+    case 1:
+        return find_overloads(names[0], type_args);
+    case 2: {
+        if (modules.contains(names[0])) {
+            auto const &mod = modules.at(names[0]);
+            assert(is<Module>(mod));
+            return mod->ns->find_overloads(names[1], type_args);
+        }
+        return ASTNodes {};
+    }
+    default:
+        NYI("Nested modules are not yet implemented");
+    }
 }
 
 void Parser::register_variable(std::wstring name, ASTNode node)
 {
-    assert(!namespaces.empty() && namespaces.back()->ns);
-    namespaces.back()->ns->register_variable(std::move(name), std::move(node));
+    assert(!namespaces.empty());
+    namespaces.back()->register_variable(std::move(name), std::move(node));
 }
 
 bool Parser::has_variable(std::wstring const &name) const
 {
-    assert(!namespaces.empty() && namespaces.back()->ns);
-    return namespaces.back()->ns->has_variable(name);
+    assert(!namespaces.empty());
+    return namespaces.back()->has_variable(name);
 }
 
 void Parser::register_function(std::wstring name, ASTNode fnc)
 {
-    assert(!namespaces.empty() && namespaces.back()->ns);
-    namespaces.back()->ns->register_function(std::move(name), std::move(fnc));
+    assert(!namespaces.empty());
+    namespaces.back()->register_function(std::move(name), std::move(fnc));
 }
 
 void Parser::unregister_function(std::wstring name, ASTNode fnc)
 {
-    assert(!namespaces.empty() && namespaces.back()->ns);
-    namespaces.back()->ns->unregister_function(std::move(name), std::move(fnc));
+    assert(!namespaces.empty());
+    namespaces.back()->unregister_function(std::move(name), std::move(fnc));
+}
+
+void dump_namespace_stack(Parser const &parser, auto const &prefix)
+{
+#ifdef DEBUG_NAMESPACE_STACK
+    std::stringstream ss;
+    ss << prefix;
+    std::ranges::for_each(
+        parser.namespaces | std::ranges::views::reverse,
+        [&ss](auto const &n) {
+            ss << " <- " << n->node.value() << ' ' << SyntaxNodeType_name(n->node->type()) << ' ' << n.id.value();
+        });
+    info("{}", ss.str());
+#endif
 }
 
 pType Parser::find_type(std::wstring const &name) const
 {
-    assert(!namespaces.empty() && namespaces.back()->ns);
-#ifdef DEBUG_NAMESPACE_STACK
-    std::stringstream ss;
-    ss << "[S*]";
-    for (auto &n : namespaces | std::ranges::views::reverse) {
-        if (n->ns) {
-            ss << " <- " << n.id.value() << ' ' << SyntaxNodeType_name(n->type()) << ' ' << reinterpret_cast<intptr_t>(&*(n->ns));
-        } else {
-            ss << " <- " << n.id.value() << ' ' << SyntaxNodeType_name(n->type()) << " *********";
-        }
-    }
-    info("{}", ss.str());
-#endif
-    return namespaces.back()->ns->find_type(name);
+    assert(!namespaces.empty());
+    dump_namespace_stack(*this, std::format("[S* {}]", as_utf8(name)));
+    return namespaces.back()->find_type(name);
 }
 
 ASTNode Parser::current_function() const
 {
-    assert(!namespaces.empty() && namespaces.back()->ns);
-    return namespaces.back()->ns->current_function();
+    assert(!namespaces.empty());
+    return namespaces.back()->current_function();
 }
 
 void Parser::register_type(std::wstring name, pType type)
 {
-    assert(!namespaces.empty() && namespaces.back()->ns);
-    namespaces.back()->ns->register_type(std::move(name), std::move(type));
+    assert(!namespaces.empty());
+    namespaces.back()->register_type(std::move(name), std::move(type));
 }
 
 void Parser::clear_namespaces()
@@ -1414,43 +1451,23 @@ void Parser::clear_namespaces()
     namespaces.clear();
 }
 
-void Parser::push_namespace(ASTNode const &ns)
+void Parser::push_namespace(ASTNode const &n)
 {
-    assert(ns->ns);
-    if (!namespaces.empty() && ns->ns->parent == nullptr) {
-        ns->ns->parent = namespaces.back();
+    assert(n->ns);
+    if (!namespaces.empty() && n->ns->parent == nullptr) {
+        n->ns->parent = namespaces.back();
     }
-    namespaces.push_back(ns);
-#ifdef DEBUG_NAMESPACE_STACK
-    std::stringstream ss;
-    ss << "[S+]";
-    for (auto &n : namespaces | std::ranges::views::reverse) {
-        if (n->ns) {
-            ss << " <- " << n.id.value() << ' ' << SyntaxNodeType_name(n->type()) << ' ' << reinterpret_cast<intptr_t>(&*(n->ns));
-        } else {
-            ss << " <- " << n.id.value() << ' ' << SyntaxNodeType_name(n->type()) << " *********";
-        }
-    }
-    info("{}", ss.str());
-#endif
+    namespaces.push_back(n->ns);
+    dump_namespace_stack(*this, std::format("[S+ {}]", n.value()));
 }
 
-void Parser::pop_namespace()
+void Parser::pop_namespace(ASTNode const &n)
 {
     assert(!namespaces.empty());
-    namespaces.pop_back();
-#ifdef DEBUG_NAMESPACE_STACK
-    std::stringstream ss;
-    ss << "[S-]";
-    for (auto &n : namespaces | std::ranges::views::reverse) {
-        if (n->ns) {
-            ss << " <- " << n.id.value() << ' ' << SyntaxNodeType_name(n->type()) << ' ' << reinterpret_cast<intptr_t>(&*(n->ns));
-        } else {
-            ss << " <- " << n.id.value() << ' ' << SyntaxNodeType_name(n->type()) << " *********";
-        }
+    if (namespaces.back()->node.value() == n.value()) {
+        namespaces.pop_back();
+        dump_namespace_stack(*this, std::format("[S- {}]", n.value()));
     }
-    info("{}", ss.str());
-#endif
 }
 
 void Parser::append(LexerErrorMessage const &lexer_error)

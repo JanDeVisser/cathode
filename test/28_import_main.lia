@@ -1,0 +1,9 @@
+import import_28
+
+public func main() i32 {
+    x: i32 = 4::i32
+    y: i32 = import_28.sqr(x)
+    putint(y) endln()
+    return 0::i32
+}
+

@@ -11,14 +11,10 @@
 
 namespace Lia {
 
-Namespace::Namespace(ASTNode parent)
-    : parent(std::move(parent))
+Namespace::Namespace(ASTNode node, NSNode parent)
+    : node(std::move(node))
+    , parent(std::move(parent))
 {
-}
-
-ASTNode Namespace::parent_of() const
-{
-    return parent;
 }
 
 bool Namespace::is_registered(std::wstring const &name) const
@@ -37,23 +33,22 @@ pType Namespace::find_type(std::wstring const &name) const
     if (has_type(name)) {
         return types.at(name);
     }
-    if (auto p = parent_of(); p != nullptr) {
-        assert(p->ns);
-        return p->ns->find_type(name);
+    if (auto p = parent; p != nullptr) {
+        return p->find_type(name);
     }
     return nullptr;
 }
 
 ASTNode Namespace::current_function() const
 {
-    if (parent_of() == nullptr) {
+    if (parent == nullptr) {
         return nullptr;
     }
-    auto p = parent_of();
+    auto p = parent->node;
     if (is<FunctionDefinition>(p)) {
         return p;
     }
-    return p->ns->current_function();
+    return parent->current_function();
 }
 
 void Namespace::register_type(std::wstring name, pType type)
@@ -72,9 +67,8 @@ ASTNode Namespace::find_variable(std::wstring const &name) const
     if (variables.contains(name)) {
         return variables.at(name);
     }
-    if (auto p = parent_of(); p != nullptr) {
-        assert(p->ns);
-        return p->ns->find_variable(name);
+    if (auto p = parent; p != nullptr) {
+        return p->find_variable(name);
     }
     return nullptr;
 }
@@ -130,9 +124,8 @@ ASTNode Namespace::find_function(std::wstring const &name, pType const &type) co
     if (auto here = find_function_here(name, type); here != nullptr) {
         return here;
     }
-    if (auto p = parent_of(); p != nullptr) {
-        assert(p->ns);
-        return p->ns->find_function(name, type);
+    if (auto p = parent; p != nullptr) {
+        return p->find_function(name, type);
     }
     return nullptr;
 }
@@ -155,9 +148,8 @@ ASTNode Namespace::find_function_by_arg_list(std::wstring const &name, pType con
             }
         }
     }
-    if (auto p = parent_of(); p != nullptr) {
-        assert(p->ns);
-        return p->ns->find_function_by_arg_list(name, type);
+    if (auto p = parent; p != nullptr) {
+        return p->find_function_by_arg_list(name, type);
     }
     return nullptr;
 }
@@ -174,9 +166,8 @@ ASTNodes Namespace::find_overloads(std::wstring const &name, ASTNodes const &typ
                 }
             }
         }
-        if (auto p = ns.parent_of(); p != nullptr) {
-            assert(p->ns);
-            find_them(p->ns.value(), overloads);
+        if (auto p = ns.parent; p != nullptr) {
+            find_them(*p, overloads);
         }
     };
     ASTNodes ret;

@@ -5,7 +5,6 @@
  */
 
 #include <cstdint>
-#include <cstring>
 #include <functional>
 
 #include <App/Operator.h>
@@ -44,6 +43,37 @@ ASTNode normalize(ASTNode n, BinaryExpression const &impl)
         return make_node<ExpressionList>(n, nodes);
     };
 
+    auto make_name_list = [](ASTNode const &n) -> std::expected<ASTNode, LiaError> {
+        ASTNodes                                                 nodes;
+        std::function<std::expected<ASTNode, LiaError>(ASTNode)> flatten;
+        flatten = [&nodes, &flatten](ASTNode n) -> std::expected<ASTNode, LiaError> {
+            if (is<BinaryExpression>(n)) {
+                auto const &binexp { get<BinaryExpression>(n) };
+                if (binexp.op != Operator::MemberAccess) {
+                    return std::unexpected(LiaError { n->location, L"Expected dotted identifier list" });
+                }
+                if (auto res = flatten(binexp.lhs); !res) {
+                    return std::unexpected(res.error());
+                }
+                if (auto res = flatten(binexp.rhs); !res) {
+                    return std::unexpected(res.error());
+                }
+            } else if (is<Identifier>(n)) {
+                nodes.push_back(normalize(n));
+            } else {
+                return std::unexpected(LiaError { n->location, L"Expected dotted identifier list" });
+            }
+            return n;
+        };
+        if (is<Identifier>(n)) {
+            return normalize(n);
+        }
+        if (auto res = flatten(n); !res) {
+            return std::unexpected(res.error());
+        }
+        return make_node<ExpressionList>(n, nodes);
+    };
+
     auto const_evaluate = [n](ASTNode lhs, Operator op, ASTNode rhs) -> ASTNode {
         auto const &lhs_const = std::get_if<Constant>(&lhs->node);
         if (lhs_const == nullptr || !lhs_const->bound_value) {
@@ -79,8 +109,13 @@ ASTNode normalize(ASTNode n, BinaryExpression const &impl)
         }
         assert(is<ExpressionList>(arg_list));
         arg_list = normalize(arg_list);
-        auto call = make_node<Call>(n, normalize(impl.lhs), arg_list);
-        return normalize(call);
+        if (auto res = make_name_list(impl.lhs); !res) {
+            n.bind_error(res.error());
+            return {};
+        } else {
+            auto call = make_node<Call>(n, res.value(), arg_list);
+            return normalize(call);
+        }
     }
     case Operator::Sequence:
         return make_expression_list();
@@ -169,6 +204,7 @@ ASTNode normalize(ASTNode n, Embed const &impl)
 {
     auto fname = as_utf8(impl.file_name);
     if (auto contents_maybe = read_file_by_name<wchar_t>(fname); contents_maybe.has_value()) {
+        info(L"Embedding `{}`", impl.file_name);
         auto const &contents = contents_maybe.value();
         return make_node<Constant>(n, make_value(contents));
     } else {
@@ -240,20 +276,22 @@ ASTNode normalize(ASTNode n, Import const &impl)
         if (fname[ix] == '.')
             fname[ix] = '/';
     }
-    if (!fname.ends_with(L".arw")) {
-        fname += L".arw";
+    if (!fname.ends_with(L".lia")) {
+        fname += L".lia";
     }
     if (auto contents_maybe = read_file_by_name<wchar_t>(as_utf8(fname)); contents_maybe.has_value()) {
+        info(L"Importing module `{}`", impl.file_name);
         auto const &contents = contents_maybe.value();
-        auto        module = parse<Module>(*(n.repo), std::move(contents), as_utf8(impl.file_name));
+        Parser     &parser { *(n.repo) };
+        auto        module = parse<Module>(parser, std::move(contents), as_utf8(impl.file_name));
         if (module) {
             module->location = n->location;
-            return normalize(module);
+            return parser.make_node<Dummy>(n->location);
         }
     } else {
         n.error(L"Could not open import file `{}`", fname);
     }
-    return nullptr;
+    return n;
 }
 
 template<>
@@ -261,6 +299,7 @@ ASTNode normalize(ASTNode n, Include const &impl)
 {
     auto fname = as_utf8(impl.file_name);
     if (auto contents_maybe = read_file_by_name<wchar_t>(fname); contents_maybe.has_value()) {
+        info(L"Including `{}`", impl.file_name);
         auto const &contents = contents_maybe.value();
         auto        node = parse<Block>(*(n.repo), std::move(contents), fname);
         if (node) {
@@ -282,7 +321,9 @@ ASTNode normalize(ASTNode n, LoopStatement const &impl)
 template<>
 ASTNode normalize(ASTNode n, Module const &impl)
 {
-    n->init_namespace();
+    if (n->ns == nullptr) {
+        n->init_namespace();
+    }
     return make_node<Module>(n, impl.name, impl.source, normalize(impl.statements));
 }
 
@@ -324,20 +365,26 @@ ASTNode normalize(ASTNode n, Parameter const &impl)
 template<>
 ASTNode normalize(ASTNode n, Program const &impl)
 {
+    Parser &parser = *(n.repo);
+    assert(parser.program == n);
     n->init_namespace();
     for (auto const &t : TypeRegistry::the().types) {
-        trace(L"Registering built-in type `{}`", t.id);
         n->ns->register_type(t.name, t.id);
     }
-    auto                            statements = normalize(impl.statements);
-    std::map<std::wstring, ASTNode> modules;
-    for (auto &[name, mod] : impl.modules) {
-        auto const normalized = normalize(mod);
-        if (normalized != nullptr) {
-            modules[std::get<Module>(mod->node).name] = normalized;
+    auto statements = normalize(impl.statements);
+    auto again { true };
+    while (again) {
+        again = false;
+        for (auto &[name, mod] : parser.modules) {
+            auto const normalized = normalize(mod);
+            if (normalized != mod) {
+                parser.modules[name] = normalized;
+                again = true;
+            }
         }
     }
-    return make_node<Program>(n, impl.name, modules, statements);
+    auto ret = make_node<Program>(n, impl.name, statements);
+    return ret;
 }
 
 template<>
@@ -484,17 +531,17 @@ ASTNode normalize(ASTNode n, Yield const &impl)
     return make_node<Yield>(n, impl.label, normalize(impl.statement));
 }
 
-/* ======================================================================== */
-
 ASTNode normalize(ASTNode node)
 {
     if (node == nullptr) {
         return nullptr;
     }
+    auto &parser { *(node.repo) };
     trace(L"[->N] {:t}", node);
     ASTNode ret = node;
     if (node->status < ASTStatus::Normalized) {
-        if (node->ns.has_value()) {
+        size_t stack_size { parser.namespaces.size() };
+        if (node->ns != nullptr) {
             node->id.repo->push_namespace(node);
         }
         char const *t = SyntaxNodeType_name(node->type());
@@ -503,8 +550,8 @@ ASTNode normalize(ASTNode node)
                 return normalize(node, impl);
             },
             node->node);
-        if (ret->ns.has_value()) {
-            ret.repo->pop_namespace();
+        while (parser.namespaces.size() > stack_size) {
+            ret.repo->pop_namespace(node);
         }
         if (ret != nullptr && ret->status < ASTStatus::Normalized) {
             ret->status = ASTStatus::Normalized;

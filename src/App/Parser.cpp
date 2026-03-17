@@ -367,6 +367,61 @@ std::wstring_view Parser::text_of(TokenLocation const &location) const
     return L"";
 }
 
+ASTNode parse_number(Parser &parser, Parser::Token number)
+{
+    auto handle_exponent = [&parser, &number](std::wstring_view fraction = L"") -> ASTNode {
+        if (auto scientific = parser.lexer.peek(); scientific.kind == TokenKind::Identifier) {
+            if (auto e { parser.text_of(scientific) }; e == L"e" || e == L"E") {
+                auto bookmark { parser.lexer.bookmark() };
+                parser.lexer.lex();
+                if (auto exp = parser.lexer.peek(); exp.kind == TokenKind::Number) {
+                    parser.lexer.lex();
+                    return parser.make_node<Decimal>(
+                        number.location + exp.location,
+                        parser.text_of(number),
+                        fraction,
+                        parser.text_of(exp));
+                } else {
+                    parser.lexer.push_back(bookmark);
+                }
+            }
+        }
+        return parser.make_node<Decimal>(
+            number.location + parser.lexer.last_location,
+            parser.text_of(number),
+            fraction);
+    };
+
+    auto next { parser.lexer.peek() };
+    switch (next.kind) {
+    case TokenKind::Symbol: {
+        auto symbol { next.symbol_code() };
+        if (symbol == '.') {
+            parser.lexer.lex();
+            auto frac { parser.lexer.peek() };
+            switch (frac.kind) {
+            case TokenKind::Number:
+                parser.lexer.lex();
+                return handle_exponent(parser.text_of(frac));
+            case TokenKind::Identifier:
+                return handle_exponent();
+            default:
+                return parser.make_node<Decimal>(
+                    number.location + next.location,
+                    parser.text_of(number));
+            }
+        }
+        break;
+    }
+    case TokenKind::Identifier:
+        return handle_exponent();
+    default:
+        break;
+    }
+    parser.lexer.lex();
+    return parser.make_node<Number>(number.location, parser.text_of(number), number.radix());
+}
+
 ASTNode Parser::parse_primary()
 {
     auto token = lexer.peek();
@@ -374,8 +429,7 @@ ASTNode Parser::parse_primary()
     ASTNode ret { nullptr };
     switch (token.kind) {
     case TokenKind::Number: {
-        ret = make_node<Number>(token.location, text_of(token), token.number_type());
-        lexer.lex();
+        ret = parse_number(*this, token);
         break;
     }
     case TokenKind::QuotedString: {
@@ -693,10 +747,7 @@ ASTNode Parser::parse_type()
             return {};
         }
         if (auto res = lexer.expect(TokenKind::Number); !res.has_value()) {
-            append(res.error(), "Expected array size, `0`, or `]`");
-            return {};
-        } else if (res.value().number_type() == NumberType::Decimal) {
-            append(res.error(), "Array size must be integer");
+            append(res.error(), "Expected integer array size, `0`, or `]`");
             return {};
         } else {
             if (auto err = lexer.expect_symbol(']'); !err.has_value()) {
@@ -849,12 +900,12 @@ ASTNode Parser::parse_enum()
         ASTNode value_node { nullptr };
         if (lexer.accept_symbol('=')) {
             auto value = lexer.peek();
-            if (!value.matches(TokenKind::Number) || value.number_type() == NumberType::Decimal) {
+            if (!value.matches(TokenKind::Number)) {
                 append(value.location, "Expected enum value"); // Make better
                 return {};
             }
             lexer.lex();
-            value_node = make_node<Number>(value.location, text_of(value), value.number_type());
+            value_node = make_node<Number>(value.location, text_of(value), value.radix());
         }
         values.emplace_back(make_node<EnumValue>(
             label.value().location + lexer.last_location,

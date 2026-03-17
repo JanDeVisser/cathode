@@ -643,6 +643,11 @@ Value::Value(int64_t const val)
 {
 }
 
+Value::Value(intptr_t const val)
+    : Value(TypeRegistry::u64, val)
+{
+}
+
 Value::Value(uint64_t const val)
     : Value(TypeRegistry::u64, val)
 {

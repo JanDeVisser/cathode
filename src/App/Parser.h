@@ -106,6 +106,15 @@ struct Parser {
         return ret;
     }
 
+    ASTNode add_node(SyntaxNode impl)
+    {
+        nodes.push_back(ASTNodeImpl { std::move(impl) });
+        ASTNode ret = { this };
+        nodes.back().id = ret;
+        trace(L"[C] {}", ret);
+        return ret;
+    }
+
     template<class N>
     ASTNode copy_node(TokenLocation loc, N impl)
     {
@@ -237,6 +246,17 @@ template<typename Node, typename... Args>
 ASTNode make_node(ASTNode from, Args... args)
 {
     ASTNode ret = from.repo->make_node<Node>(from->location, args...);
+    if (from->ns != nullptr) {
+        ret->ns = from->ns;
+    }
+    ret->supercedes = from;
+    from->superceded_by = ret;
+    return ret;
+}
+
+ASTNode add_node(ASTNode from, SyntaxNode impl)
+{
+    ASTNode ret = from.repo->add_node(from->location, std::move(impl));
     if (from->ns != nullptr) {
         ret->ns = from->ns;
     }

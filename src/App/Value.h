@@ -159,6 +159,7 @@ struct Value {
     Value(uint32_t val);
     Value(int64_t val);
     Value(uint64_t val);
+    Value(intptr_t val);
     Value(float val);
     Value(double val);
     Value(bool val);

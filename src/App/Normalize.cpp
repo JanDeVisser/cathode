@@ -14,6 +14,351 @@
 
 namespace Lia {
 
+using FoldResult = std::optional<SyntaxNode>;
+
+template<typename Func>
+static FoldResult evaluate_op(Number const &lhs, Number const &rhs, Func const &func)
+{
+    if (lhs.value.index() != rhs.value.index()) {
+        return {};
+    }
+    return std::visit(
+        [&func](auto lhs_value, auto rhs_value) -> Number {
+            return Number { func(lhs_value, rhs_value) };
+        },
+        lhs.value, rhs.value);
+}
+
+template<typename Func>
+static FoldResult evaluate_relational_op(Number const &lhs, Number const &rhs, Func const &func)
+{
+    if (lhs.value.index() != rhs.value.index()) {
+        return {};
+    }
+    return std::visit(
+        [&func](auto lhs_value, auto rhs_value) -> BoolConstant {
+            return BoolConstant { func(lhs_value, rhs_value) };
+        },
+        lhs.value, rhs.value);
+}
+
+#undef S
+#define S(O)                                                                                  \
+    template<typename Lhs, typename Rhs>                                                      \
+    FoldResult evaluate_##O(ASTNode const &, Lhs const &lhs, ASTNode const &, Rhs const &rhs) \
+    {                                                                                         \
+        return {};                                                                            \
+    }
+BinOps(S)
+#undef S
+
+    template<>
+    FoldResult evaluate_Add(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_op(lhs, rhs,
+        [](auto x, auto y) { return x + y; });
+}
+
+template<>
+FoldResult evaluate_Subtract(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_op(lhs, rhs,
+        [](auto x, auto y) { return x - y; });
+}
+
+template<>
+FoldResult evaluate_Multiply(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_op(lhs, rhs,
+        [](auto x, auto y) { return x * y; });
+}
+
+template<>
+FoldResult evaluate_Divide(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    if (get<uint64_t>(rhs) == 0) {
+        fatal("Division by zero");
+    }
+    return evaluate_op(lhs, rhs,
+        [](auto x, auto y) { return x / y; });
+}
+
+template<>
+FoldResult evaluate_Modulo(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    if (get<uint64_t>(rhs) == 0) {
+        fatal("Division by zero");
+    }
+    return evaluate_op(lhs, rhs,
+        [](auto x, auto y) { return x % y; });
+}
+
+template<>
+FoldResult evaluate_Equals(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_relational_op(lhs, rhs,
+        [](auto x, auto y) { return x == y; });
+}
+
+template<>
+FoldResult evaluate_NotEqual(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_relational_op(lhs, rhs,
+        [](auto x, auto y) { return x != y; });
+}
+
+template<>
+FoldResult evaluate_Less(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_relational_op(lhs, rhs,
+        [](auto x, auto y) { return x < y; });
+}
+
+template<>
+FoldResult evaluate_LessEqual(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_relational_op(lhs, rhs,
+        [](auto x, auto y) { return x <= y; });
+}
+
+template<>
+FoldResult evaluate_Greater(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_relational_op(lhs, rhs,
+        [](auto x, auto y) { return x > y; });
+}
+
+template<>
+FoldResult evaluate_GreaterEqual(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_relational_op(lhs, rhs,
+        [](auto x, auto y) { return x >= y; });
+}
+
+template<>
+FoldResult evaluate_BinaryAnd(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_op(lhs, rhs,
+        [](auto x, auto y) { return x & y; });
+}
+
+template<>
+FoldResult evaluate_BinaryOr(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_op(lhs, rhs,
+        [](auto x, auto y) { return x | y; });
+}
+
+template<>
+FoldResult evaluate_BinaryXor(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_op(lhs, rhs,
+        [](auto x, auto y) { return x ^ y; });
+}
+
+template<>
+FoldResult evaluate_ShiftLeft(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_op(lhs, rhs,
+        [](auto x, auto y) { return x << y; });
+}
+
+template<>
+FoldResult evaluate_ShiftRight(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
+{
+    return evaluate_op(lhs, rhs,
+        [](auto x, auto y) { return x >> y; });
+}
+
+template<>
+FoldResult evaluate_LogicalAnd(ASTNode const &, BoolConstant const &lhs, ASTNode const &, BoolConstant const &rhs)
+{
+    return BoolConstant { lhs.value && rhs.value };
+}
+
+template<>
+FoldResult evaluate_LogicalOr(ASTNode const &, BoolConstant const &lhs, ASTNode const &, BoolConstant const &rhs)
+{
+    return BoolConstant { lhs.value || rhs.value };
+}
+
+FoldResult evaluate_Idempotent(ASTNode const &, Number const &lhs, ASTNode const &, auto const &)
+{
+    return lhs;
+}
+
+FoldResult evaluate_Negate(ASTNode const &, Number const &lhs, ASTNode const &, auto const &)
+{
+    return evaluate_op(lhs, Number { (uint32_t) 0 },
+        [](auto x, auto) { return -x; });
+}
+
+FoldResult evaluate_BinaryInvert(ASTNode const &, Number const &number, ASTNode const &, auto const &)
+{
+    return evaluate_op(number, Number { (uint32_t) 0 },
+        [](auto x, auto) { return ~x; });
+}
+
+FoldResult evaluate_LogicalInvert(ASTNode const &, BoolConstant const &b, ASTNode const &, auto const &)
+{
+    return BoolConstant { !b.value };
+}
+
+FoldResult evaluate_Sizeof(ASTNode const &, Number const &number, ASTNode const &, auto const &)
+{
+    return Number { std::visit(
+        [](auto v) -> uint64_t {
+            return sizeof(decltype(v));
+        },
+        number.value) };
+}
+
+FoldResult evaluate_Sizeof(ASTNode const &, BoolConstant const &b, ASTNode const &, auto const &)
+{
+    return Number { static_cast<uint64_t>(1) };
+}
+
+FoldResult evaluate_Sizeof(ASTNode const &n, TypeSpecification const &spec, ASTNode const &, auto const &)
+{
+    if (auto const type_maybe = resolve(n); type_maybe != nullptr) {
+        return Number { static_cast<uint64_t>(type_maybe->size_of()) };
+    }
+    return {};
+}
+
+FoldResult evaluate_Cast(ASTNode const &, Number const &number, ASTNode &type_node, TypeSpecification const &)
+{
+    if (auto const type = resolve(type_node); type != nullptr) {
+        return std::visit(
+            overloads {
+                [&number, &type](IntType const &int_type) -> FoldResult {
+                    return std::visit(
+                        overloads {
+                            [&type, &int_type](std::unsigned_integral auto v) -> FoldResult {
+                                if (v > int_type.max_value) {
+                                    fatal("Cannot convert `{}` to `{}`", v, type->name);
+                                }
+                                return Number { int_type, v };
+                            },
+                            [&type, &int_type](std::signed_integral auto v) -> FoldResult {
+                                if (v > int_type.max_value || v < int_type.min_value) {
+                                    fatal("Cannot convert `{}` to `{}`", v, type->name);
+                                }
+                                return Number { int_type, v };
+                            } },
+                        number.value);
+                },
+                [&number, &type](EnumType const &enum_type) -> FoldResult {
+                    for (EnumType::Value const &enum_value : enum_type.values) {
+                        if (enum_value.value == get<int64_t>(number)) {
+                            return number;
+                        }
+                    }
+                    fatal("Cannot cast integer `{}` to enum `{}`", get<int64_t>(number), type->name);
+                },
+                [&type](auto const &) -> FoldResult {
+                    return {};
+                } },
+            type->description);
+    }
+    return {};
+}
+
+template<class Lhs, class Rhs>
+FoldResult fold(ASTNode lhs, Lhs const &lhs_impl, Operator oper, ASTNode rhs, Rhs const &rhs_impl)
+{
+    switch (oper) {
+#undef S
+#define S(O)          \
+    case Operator::O: \
+        return evaluate_##O(lhs, lhs_impl, rhs, rhs_impl);
+        BinOps(S)
+#undef S
+            default : UNREACHABLE();
+    }
+    return {};
+}
+
+FoldResult fold(ASTNode lhs, Operator oper, ASTNode rhs)
+{
+    if (lhs == nullptr || rhs == nullptr) {
+        UNREACHABLE();
+    }
+    return std::visit(
+        [&lhs, &rhs, &oper](auto const &lhs_impl, auto const &rhs_impl) {
+            return fold(lhs, lhs_impl, oper, rhs, rhs_impl);
+        },
+        lhs->node, rhs->node);
+}
+
+template<class N>
+FoldResult fold(Operator oper, ASTNode n, N const &operand)
+{
+    switch (oper) {
+#undef S
+#define S(O)          \
+    case Operator::O: \
+        return evaluate_##O(n, operand, ASTNode { nullptr }, Void {});
+        BinOps(S)
+#undef S
+            default : UNREACHABLE();
+    }
+    return {};
+}
+
+FoldResult fold(Operator oper, ASTNode node)
+{
+    if (node == nullptr) {
+        UNREACHABLE();
+    }
+    return std::visit(
+        [&node, &oper](auto impl) {
+            return fold(oper, node, impl);
+        },
+        node->node);
+}
+
+template<class N>
+FoldResult fold(ASTNode n, N const &impl)
+{
+    return {};
+}
+
+template<>
+FoldResult fold(ASTNode n, BinaryExpression const &impl)
+{
+    if (auto folded { fold(impl.lhs, impl.op, impl.rhs) }; folded) {
+        return folded;
+    }
+    return {};
+}
+
+template<>
+FoldResult fold(ASTNode n, UnaryExpression const &impl)
+{
+    if (auto folded { fold(impl.op, impl.operand) }; folded) {
+        return folded;
+    }
+    return {};
+}
+
+ASTNode fold(ASTNode node)
+{
+    if (node == nullptr) {
+        return nullptr;
+    }
+    if (auto folded { std::visit(
+            [&node](auto impl) -> FoldResult {
+                return fold(node, impl);
+            },
+            node->node) };
+        folded) {
+        SyntaxNode impl { *folded };
+        return add_node(node, impl);
+    }
+    return nullptr;
+}
+
 template<class N>
 ASTNode normalize(ASTNode n, N const &impl)
 {
@@ -74,29 +419,6 @@ ASTNode normalize(ASTNode n, BinaryExpression const &impl)
         return make_node<ExpressionList>(n, nodes);
     };
 
-    auto const_evaluate = [n](ASTNode lhs, Operator op, ASTNode rhs) -> ASTNode {
-        auto const &lhs_const = std::get_if<Constant>(&lhs->node);
-        if (lhs_const == nullptr || !lhs_const->bound_value) {
-            return make_node<BinaryExpression>(n, lhs, op, rhs);
-        }
-        if (op == Operator::Cast) {
-            if (is<TypeSpecification>(rhs)) {
-                if (auto const cast_type = resolve(rhs); cast_type != nullptr) {
-                    if (auto const coerced_maybe = lhs_const->bound_value.value().coerce(cast_type); coerced_maybe) {
-                        return make_node<Constant>(n, *coerced_maybe);
-                    }
-                    n.repo->append(n->location, L"Cannot cast value to `{}`", cast_type);
-                    return nullptr;
-                }
-            }
-        }
-        if (auto const &rhs_const = std::get_if<Constant>(&rhs->node); rhs_const != nullptr && rhs_const->bound_value) {
-            auto ret = evaluate(lhs_const->bound_value.value(), op, rhs_const->bound_value.value());
-            return make_node<Constant>(n, ret);
-        }
-        return make_node<BinaryExpression>(n, lhs, op, rhs);
-    };
-
     switch (impl.op) {
     case Operator::Call: {
         auto arg_list = normalize(impl.rhs);
@@ -120,13 +442,11 @@ ASTNode normalize(ASTNode n, BinaryExpression const &impl)
     case Operator::Sequence:
         return make_expression_list();
     case Operator::MemberAccess: {
-        auto aggregate = normalize(impl.lhs);
-        auto member = normalize(impl.rhs);
-        if (is<Constant>(member)) {
-            auto const &constant = get<Constant>(member);
-            if (constant.bound_value && constant.bound_value->type == TypeRegistry::string) {
-                member = make_node<Identifier>(member, constant.bound_value->to_string());
-            }
+        auto aggregate { normalize(impl.lhs) };
+        auto member { normalize(impl.rhs) };
+        if (is<QuotedString>(member)) {
+            auto const &qs { get<QuotedString>(member) };
+            member = make_node<Identifier>(member, qs.string.substr(1, qs.string.length() - 2));
         }
         return make_node<BinaryExpression>(n, aggregate, impl.op, member);
     } break;
@@ -141,7 +461,11 @@ ASTNode normalize(ASTNode n, BinaryExpression const &impl)
                 normalize(impl.rhs));
             return make_node<BinaryExpression>(n, impl.lhs, Operator::Assign, normalize(bin_expr));
         }
-        return const_evaluate(normalize(impl.lhs), impl.op, normalize(impl.rhs));
+        auto normalized = make_node<BinaryExpression>(n, normalize(impl.lhs), impl.op, normalize(impl.rhs));
+        if (auto folded = fold(normalized); folded != nullptr) {
+            return folded;
+        }
+        return normalized;
     }
 }
 
@@ -151,12 +475,6 @@ ASTNode normalize(ASTNode n, Block const &impl)
     const_cast<ASTNode &>(n)->init_namespace();
     auto ret = make_node<Block>(n, normalize(impl.statements));
     return ret;
-}
-
-template<>
-ASTNode normalize(ASTNode n, BoolConstant const &impl)
-{
-    return make_node<Constant>(n, Value { impl.value });
 }
 
 template<>
@@ -206,7 +524,7 @@ ASTNode normalize(ASTNode n, Embed const &impl)
     if (auto contents_maybe = read_file_by_name<wchar_t>(fname); contents_maybe.has_value()) {
         info(L"Embedding `{}`", impl.file_name);
         auto const &contents = contents_maybe.value();
-        return make_node<Constant>(n, make_value(contents));
+        return make_node<QuotedString>(n, contents, QuoteType::DoubleQuote);
     } else {
         n.error("Could not open `{}`: {}", fname, contents_maybe.error().to_string());
         return nullptr;
@@ -328,35 +646,6 @@ ASTNode normalize(ASTNode n, Module const &impl)
 }
 
 template<>
-ASTNode normalize(ASTNode n, Nullptr const &)
-{
-    return make_node<Constant>(n, Value { nullptr });
-}
-
-template<>
-ASTNode normalize(ASTNode n, Number const &impl)
-{
-    switch (impl.number_type) {
-    case NumberType::Decimal: {
-        char      *end_ptr;
-        auto const narrow_string = as_utf8(impl.number);
-        auto const value = strtod(narrow_string.data(), &end_ptr);
-        assert(end_ptr != narrow_string.data());
-        return make_node<Constant>(n, Value { value });
-    }
-    default: {
-        auto const value = string_to_integer<int64_t>(impl.number)
-                               .or_else([&impl]() -> std::optional<int64_t> {
-                                   fatal(L"Could not convert string `{}` to integer. This is unexpected", impl.number);
-                                   return { 0 };
-                               })
-                               .value();
-        return make_node<Constant>(n, Value { value });
-    }
-    }
-}
-
-template<>
 ASTNode normalize(ASTNode n, Parameter const &impl)
 {
     return make_node<Parameter>(n, impl.name, normalize(impl.type_name));
@@ -428,11 +717,11 @@ ASTNode normalize(ASTNode n, QuotedString const &impl)
 
     switch (impl.quote_type) {
     case QuoteType::DoubleQuote:
-        return make_node<Constant>(n, make_value(unescape(impl.string)));
+        return make_node<String>(n, unescape(impl.string));
     case QuoteType::BackQuote:
-        return make_node<Constant>(n, make_cstring(as_utf8(unescape(impl.string))));
+        return make_node<CString>(n, as_utf8(unescape(impl.string)));
     case QuoteType::SingleQuote:
-        return make_node<Constant>(n, Value { impl.string[1] });
+        return make_node<Number>(n, static_cast<uint64_t>(impl.string[1]));
     default:
         UNREACHABLE();
     }
@@ -496,19 +785,11 @@ ASTNode normalize(ASTNode n, TypeSpecification const &impl)
 template<>
 ASTNode normalize(ASTNode n, UnaryExpression const &impl)
 {
-    auto normalized_operand = normalize(impl.operand);
-    if (auto *operand_const = get_if<Constant>(normalized_operand); operand_const != nullptr) {
-        auto res = evaluate(impl.op, operand_const->bound_value.value());
-        return make_node<Constant>(n, res);
+    auto normalized { make_node<UnaryExpression>(n, impl.op, normalize(impl.operand)) };
+    if (auto folded { fold(normalized) }; folded != nullptr) {
+        return folded;
     }
-    if (impl.op == Operator::Sizeof) {
-        if (is<TypeSpecification>(normalized_operand)) {
-            if (auto const type_maybe = resolve(normalized_operand); type_maybe != nullptr) {
-                return make_node<Constant>(n, static_cast<int64_t>(type_maybe->size_of()));
-            }
-        }
-    }
-    return n;
+    return normalized;
 }
 
 template<>
@@ -574,5 +855,4 @@ ASTNodes normalize(ASTNodes nodes)
         });
     return normalized;
 }
-
 }

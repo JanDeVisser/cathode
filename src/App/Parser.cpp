@@ -369,56 +369,34 @@ std::wstring_view Parser::text_of(TokenLocation const &location) const
 
 ASTNode parse_number(Parser &parser, Parser::Token number)
 {
-    auto handle_exponent = [&parser, &number](std::wstring_view fraction = L"") -> ASTNode {
-        if (auto scientific = parser.lexer.peek(); scientific.kind == TokenKind::Identifier) {
-            if (auto e { parser.text_of(scientific) }; e == L"e" || e == L"E") {
-                auto bookmark { parser.lexer.bookmark() };
-                parser.lexer.lex();
-                if (auto exp = parser.lexer.peek(); exp.kind == TokenKind::Number) {
-                    parser.lexer.lex();
-                    return parser.make_node<Decimal>(
-                        number.location + exp.location,
-                        parser.text_of(number),
-                        fraction,
-                        parser.text_of(exp));
-                } else {
-                    parser.lexer.push_back(bookmark);
-                }
-            }
+    std::wstring_view frac { L"" };
+    std::wstring_view exponent { L"" };
+
+    parser.lexer.lex();
+    if (parser.lexer.accept_symbol('.')) {
+        if (auto frac_maybe { parser.lexer.accept_number() }; frac_maybe) {
+            frac = parser.text_of(*frac_maybe);
         }
+    }
+
+    auto bm { parser.lexer.bookmark() };
+    if (auto e = parser.lexer.accept_identifier(); e) {
+        auto e_text { parser.text_of(*e) };
+        if (e_text == L"e" || e_text == L"E") {
+            if (auto exp { parser.lexer.accept_number() }; exp) {
+                exponent = parser.text_of(*exp);
+            }
+        } else {
+            parser.lexer.push_back(bm);
+        }
+    }
+
+    if (!frac.empty() || !exponent.empty()) {
         return parser.make_node<Decimal>(
             number.location + parser.lexer.last_location,
-            parser.text_of(number),
-            fraction);
-    };
-
-    auto next { parser.lexer.peek() };
-    switch (next.kind) {
-    case TokenKind::Symbol: {
-        auto symbol { next.symbol_code() };
-        if (symbol == '.') {
-            parser.lexer.lex();
-            auto frac { parser.lexer.peek() };
-            switch (frac.kind) {
-            case TokenKind::Number:
-                parser.lexer.lex();
-                return handle_exponent(parser.text_of(frac));
-            case TokenKind::Identifier:
-                return handle_exponent();
-            default:
-                return parser.make_node<Decimal>(
-                    number.location + next.location,
-                    parser.text_of(number));
-            }
-        }
-        break;
+            parser.text_of(number), frac, exponent);
     }
-    case TokenKind::Identifier:
-        return handle_exponent();
-    default:
-        break;
-    }
-    parser.lexer.lex();
+    auto num { parser.text_of(number) };
     return parser.make_node<Number>(number.location, parser.text_of(number), number.radix());
 }
 
@@ -1582,5 +1560,16 @@ BindError Parser::bind_error(TokenLocation location, std::string const &msg)
 {
     append(location, msg);
     return BindError { ASTStatus::BindErrors };
+}
+
+ASTNode add_node(ASTNode from, SyntaxNode impl)
+{
+    ASTNode ret = from.repo->add_node(from->location, std::move(impl));
+    if (from->ns != nullptr) {
+        ret->ns = from->ns;
+    }
+    ret->supercedes = from;
+    from->superceded_by = ret;
+    return ret;
 }
 }

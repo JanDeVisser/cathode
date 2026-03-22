@@ -21,7 +21,6 @@
 
 #include <App/Operator.h>
 #include <App/Type.h>
-#include <App/Value.h>
 
 namespace Lia {
 
@@ -367,49 +366,46 @@ struct Number {
     Int value;
 
     Number(std::wstring_view number, Radix radix);
+    Number(Int value);
+
     Number(std::integral auto value)
         : value(value)
     {
     }
 
-    Number(IntType const &type, auto value)
+    Number(IntType const &type, auto v)
     {
         if (type.is_signed) {
             switch (type.width_bits) {
             case 8:
-                value = static_cast<int8_t>(value);
+                value.emplace<int8_t>(v);
                 break;
             case 16:
-                value = static_cast<int16_t>(value);
+                value.emplace<int16_t>(v);
                 break;
             case 32:
-                value = static_cast<int32_t>(value);
+                value.emplace<int32_t>(v);
                 break;
             case 64:
-                value = static_cast<int64_t>(value);
+                value.emplace<int64_t>(v);
                 break;
             }
         } else {
             switch (type.width_bits) {
             case 8:
-                value = static_cast<uint8_t>(value);
+                value.emplace<uint8_t>(v);
                 break;
             case 16:
-                value = static_cast<uint16_t>(value);
+                value.emplace<uint16_t>(v);
                 break;
             case 32:
-                value = static_cast<uint32_t>(value);
+                value.emplace<uint32_t>(v);
                 break;
             case 64:
-                value = static_cast<uint64_t>(value);
+                value.emplace<uint64_t>(v);
                 break;
             }
         }
-    }
-
-    Number(Int value)
-        : value(value)
-    {
     }
 };
 
@@ -605,6 +601,27 @@ concept is_component = std::is_same_v<N, Program> || std::is_same_v<N, Module>;
 
 template<class N>
 concept is_identifier = std::is_same_v<N, Identifier> || std::is_same_v<N, StampedIdentifier>;
+
+template<typename N>
+concept Constant = std::is_same_v<N, Number>
+    || std::is_same_v<N, Decimal>
+    || std::is_same_v<N, BoolConstant>
+    || std::is_same_v<N, QuotedString>
+    || std::is_same_v<N, Void>;
+
+template<typename N>
+bool is_constant()
+{
+    return false;
+}
+
+template<Constant N>
+bool is_constant()
+{
+    return true;
+}
+
+bool is_constant(ASTNode const &n);
 
 using SyntaxNode = std::variant<Dummy,
     BinaryExpression,
@@ -809,6 +826,7 @@ BindResult   bind(ASTNode node);
 ASTNode      coerce(ASTNode node, pType const &type);
 ASTNode      stamp(ASTNode node);
 ASTNodes     stamp(ASTNodes nodes);
+ASTNode      fold(ASTNode node);
 
 }
 

@@ -27,7 +27,6 @@
 #include <App/Operator.h>
 #include <App/SyntaxNode.h>
 #include <App/Type.h>
-#include <App/Value.h>
 
 #include <App/Parser.h>
 #include <App/QBE/QBE.h>
@@ -782,101 +781,109 @@ GenResult generate_qbe_node(ASTNode const &n, Comptime const &impl, QBEContext &
 }
 
 template<>
-GenResult generate_qbe_node(ASTNode const &n, Constant const &impl, QBEContext &ctx)
+GenResult generate_qbe_node(ASTNode const &n, Void const &impl, QBEContext &ctx)
 {
-    return std::visit(
-        overloads {
-            [&n](VoidType const &) -> GenResult {
-                return QBEOperand { n, ILValue::null() };
-            },
-            [&n, &ctx, &impl](BoolType const &) -> GenResult {
-                return QBEOperand { n, ILValue::integer(as<bool>(*impl.bound_value) ? 1 : 0, ILBaseType::W) };
-            },
-            [&n, &ctx, &impl](IntType const &int_type) -> GenResult {
-                ILBaseType t;
-                int64_t    v;
-                switch (int_type.width_bits) {
-                case 8:
-                    t = (int_type.is_signed) ? ILBaseType::SB : ILBaseType::UB;
-                    v = (int_type.is_signed) ? as<int8_t>(*impl.bound_value) : as<uint8_t>(*impl.bound_value);
-                    break;
-                case 16:
-                    t = (int_type.is_signed) ? ILBaseType::SH : ILBaseType::UH;
-                    v = (int_type.is_signed) ? as<int16_t>(*impl.bound_value) : as<uint16_t>(*impl.bound_value);
-                    break;
-                case 32:
-                    t = (int_type.is_signed) ? ILBaseType::SW : ILBaseType::UW;
-                    v = (int_type.is_signed) ? as<int32_t>(*impl.bound_value) : as<uint32_t>(*impl.bound_value);
-                    break;
-                case 64:
-                    t = ILBaseType::L;
-                    v = (int_type.is_signed) ? as<int64_t>(*impl.bound_value) : as<uint64_t>(*impl.bound_value);
-                    break;
-                }
-                return QBEOperand { n, ILValue::integer(v, t) };
-            },
-            [&n, &ctx, &impl](FloatType const &float_type) -> GenResult {
-                ILBaseType t;
-                double     dbl;
-                switch (float_type.width_bits) {
-                case 32:
-                    t = ILBaseType::S;
-                    dbl = as<float>(*impl.bound_value);
-                    break;
-                case 64:
-                    t = ILBaseType::S;
-                    dbl = as<float>(*impl.bound_value);
-                    break;
-                }
-                return QBEOperand { n, ILValue::float_val(dbl, t) };
-            },
-            [&n, &ctx, &impl](ZeroTerminatedArray const &zta) -> GenResult {
-                assert(zta.array_of == TypeRegistry::u8);
-                return QBEOperand { n, ctx.add_cstring(static_cast<char const *>(as<void const *>(*impl.bound_value))) };
-            },
-            [&n, &ctx, &impl](SliceType const &slice_type) -> GenResult {
-                int var = ++ctx.next_var;
-                assert(slice_type.slice_of == TypeRegistry::u32);
-                auto slice = as<Slice>(*impl.bound_value);
-                auto len_id = ++ctx.next_var;
-                auto ret = ILValue::local(var, ctx.qbe_type(TypeRegistry::string));
-                ctx.add_operation(
-                    AllocDef {
-                        16,
-                        16,
-                        ret,
-                    });
-                ctx.add_operation(
-                    StoreDef {
-                        ctx.add_string(
-                            std::wstring_view {
-                                static_cast<wchar_t *>(slice.ptr),
-                                static_cast<size_t>(slice.size),
-                            }),
-                        ret,
-                    });
-                ctx.add_operation(
-                    ExprDef {
-                        ret,
-                        ILValue::integer(8, ILBaseType::L),
-                        ILOperation::Add,
-                        ILValue::pointer(len_id),
-                    });
-                ctx.add_operation(
-                    StoreDef {
-                        ILValue::integer(slice.size, ILBaseType::L),
-                        ILValue::pointer(len_id),
-                    });
-                return QBEOperand { n, ret };
-            },
-            [](auto const &descr) -> GenResult {
-                UNREACHABLE();
-            } },
-        impl.bound_value->type->description);
+    return QBEOperand { n, ILValue::null() };
+}
+
+template<>
+GenResult generate_qbe_node(ASTNode const &n, BoolConstant const &impl, QBEContext &ctx)
+{
+    return QBEOperand { n, ILValue::integer(impl.value ? 1 : 0, ILBaseType::W) };
+}
+
+template<>
+GenResult generate_qbe_node(ASTNode const &n, Number const &impl, QBEContext &ctx)
+{
+    auto const &int_type { get<IntType>(n->bound_type) };
+    ILBaseType  t;
+    int64_t     v;
+    switch (int_type.width_bits) {
+    case 8:
+        t = (int_type.is_signed) ? ILBaseType::SB : ILBaseType::UB;
+        v = (int_type.is_signed) ? get<int8_t>(impl) : get<uint8_t>(impl.value);
+        break;
+    case 16:
+        t = (int_type.is_signed) ? ILBaseType::SH : ILBaseType::UH;
+        v = (int_type.is_signed) ? get<int16_t>(impl) : get<uint16_t>(impl.value);
+        break;
+    case 32:
+        t = (int_type.is_signed) ? ILBaseType::SW : ILBaseType::UW;
+        v = (int_type.is_signed) ? get<int32_t>(impl.value) : get<uint32_t>(impl.value);
+        break;
+    case 64:
+        t = ILBaseType::L;
+        v = (int_type.is_signed) ? get<int64_t>(impl.value) : get<uint64_t>(impl.value);
+        break;
+    }
+    return QBEOperand { n, ILValue::integer(v, t) };
+}
+
+template<>
+GenResult generate_qbe_node(ASTNode const &n, Decimal const &impl, QBEContext &ctx)
+{
+    auto const &float_type { get<FloatType>(n->bound_type) };
+    ILBaseType  t;
+    double      dbl;
+    switch (float_type.width_bits) {
+    case 32:
+        t = ILBaseType::S;
+        dbl = static_cast<float>(impl.value);
+        break;
+    case 64:
+        t = ILBaseType::D;
+        dbl = impl.value;
+        break;
+    }
+    return QBEOperand { n, ILValue::float_val(dbl, t) };
+}
+
+template<>
+GenResult generate_qbe_node(ASTNode const &n, CString const &impl, QBEContext &ctx)
+{
+    return QBEOperand { n, ctx.add_cstring(static_cast<char const *>(impl.string.data())) };
+}
+
+template<>
+GenResult generate_qbe_node(ASTNode const &n, String const &impl, QBEContext &ctx)
+{
+    int  var = ++ctx.next_var;
+    auto len_id = ++ctx.next_var;
+    auto ret = ILValue::local(var, ctx.qbe_type(TypeRegistry::string));
+    ctx.add_operation(
+        AllocDef {
+            16,
+            16,
+            ret,
+        });
+    ctx.add_operation(
+        StoreDef {
+            ctx.add_string(impl.string),
+            ret,
+        });
+    ctx.add_operation(
+        ExprDef {
+            ret,
+            ILValue::integer(8, ILBaseType::L),
+            ILOperation::Add,
+            ILValue::pointer(len_id),
+        });
+    ctx.add_operation(
+        StoreDef {
+            ILValue::integer(impl.string.length(), ILBaseType::L),
+            ILValue::pointer(len_id),
+        });
+    return QBEOperand { n, ret };
 }
 
 template<>
 GenResult generate_qbe_node(ASTNode const &n, Dummy const &impl, QBEContext &ctx)
+{
+    return QBEOperand { n, ILValue::null() };
+}
+
+template<>
+GenResult generate_qbe_node(ASTNode const &n, Nullptr const &impl, QBEContext &ctx)
 {
     return QBEOperand { n, ILValue::null() };
 }

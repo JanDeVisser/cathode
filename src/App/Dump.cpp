@@ -232,11 +232,23 @@ std::wstring to_string(ASTNode const &n, Call const &impl)
 }
 
 template<>
-std::wstring to_string(ASTNode const &, Constant const &impl)
+std::wstring to_string(ASTNode const &, Decimal const &impl)
 {
-    assert(impl.bound_value.has_value());
     std::wstringstream os;
-    os << impl.bound_value.value();
+    os << impl.value;
+    return os.str();
+}
+
+template<>
+std::wstring to_string(ASTNode const &, Number const &impl)
+{
+    std::wstringstream os;
+    std::visit(
+        [&os](auto v) {
+            os << v;
+        },
+        impl.value);
+    os << " <" << impl.value.index() << ">";
     return os.str();
 }
 
@@ -339,12 +351,6 @@ std::wstring to_string(ASTNode const &n, Module const &impl)
 }
 
 template<>
-std::wstring to_string(ASTNode const &, Number const &impl)
-{
-    return std::format(L"{} {}", impl.number, as_wstring(NumberType_name(impl.number_type)));
-}
-
-template<>
 std::wstring to_string(ASTNode const &n, Parameter const &impl)
 {
     return std::format(L"{}: {}", impl.name, to_string(impl.type_name));
@@ -352,6 +358,18 @@ std::wstring to_string(ASTNode const &n, Parameter const &impl)
 
 template<>
 std::wstring to_string(ASTNode const &, QuotedString const &impl)
+{
+    return impl.string;
+}
+
+template<>
+std::wstring to_string(ASTNode const &, CString const &impl)
+{
+    return as_wstring(impl.string);
+}
+
+template<>
+std::wstring to_string(ASTNode const &, String const &impl)
 {
     return impl.string;
 }

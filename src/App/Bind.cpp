@@ -167,7 +167,7 @@ BindResult bind(ASTNode n, BinaryExpression &impl)
     auto    lhs_type = try_bind_member(impl.lhs);
 
     if (impl.op == Operator::MemberAccess) {
-        if (lhs_type->kind() == TypeKind::TypeType) {
+        if (is<TypeType>(lhs_type)) {
             auto type_type = get<TypeType>(lhs_type).type;
             if (!is<Identifier>(impl.rhs)) {
                 return parser.bind_error(impl.rhs->location,
@@ -328,11 +328,6 @@ BindResult bind(ASTNode n, BinaryExpression &impl)
                 L"`Cast` operator requires a type as right hand side");
         }
         auto target_type = get<TypeType>(rhs_value_type).type;
-        if (auto const lhs_const = get_if<Constant>(impl.lhs); lhs_const != nullptr) {
-            if (auto const &casted = coerce(impl.lhs, target_type); casted != nullptr) {
-                return { target_type };
-            }
-        }
         return std::visit(
             overloads {
                 [&target_type, &n, &parser](IntType const &lhs_int_type, IntType const &rhs_int_type) -> BindResult {
@@ -496,7 +491,7 @@ BindResult bind(ASTNode n, Call &impl)
                 if (arg_value != param_value) {
                     return nullptr;
                 }
-                if (is<ReferenceType>(param_type) && is<Constant>(arg)) {
+                if (is<ReferenceType>(param_type) && is_constant(arg)) {
                     return nullptr;
                 }
                 if (is<ReferenceType>(param_type) && !is<ReferenceType>(arg_type)) {
@@ -669,8 +664,7 @@ BindResult bind(ASTNode n, Comptime &impl)
                 return parser.bind_error(n->location, res.error());
             } else {
                 auto const output_val = exec_res.value();
-                auto const output_slice = as<Slice>(as_value<Slice>(vm, output_val));
-                impl.output = std::wstring { static_cast<wchar_t *>(output_slice.ptr), static_cast<size_t>(output_slice.size) };
+                impl.output = static_cast<std::wstring>(output_val);
                 trace("@comptime block executed");
                 trace(L"@comptime output: {}", impl.output);
             }
@@ -699,10 +693,37 @@ BindResult bind(ASTNode n, Comptime &impl)
 }
 
 template<>
-BindResult bind(ASTNode n, Constant &impl)
+BindResult bind(ASTNode n, BoolConstant &impl)
 {
-    assert(impl.bound_value.has_value());
-    return impl.bound_value->type;
+    return TypeRegistry::boolean;
+}
+
+template<>
+BindResult bind(ASTNode n, Decimal &impl)
+{
+    return TypeRegistry::f64;
+}
+
+template<>
+BindResult bind(ASTNode n, Number &impl)
+{
+    return std::visit(
+        [](auto v) -> pType {
+            return type_of<decltype(v)>();
+        },
+        impl.value);
+}
+
+template<>
+BindResult bind(ASTNode n, String &impl)
+{
+    return TypeRegistry::string;
+}
+
+template<>
+BindResult bind(ASTNode n, CString &impl)
+{
+    return TypeRegistry::cstring;
 }
 
 template<>
@@ -760,7 +781,7 @@ BindResult bind(ASTNode n, Enum &impl)
             auto enum_value = get<EnumValue>(v);
             // TODO there are many ways the numbering of enum values can get
             // confused.
-            size_t value = (enum_value.value != nullptr) ? as<int64_t>(get<Constant>(enum_value.value).bound_value.value()) : ix;
+            size_t value = (enum_value.value != nullptr) ? get<int64_t>(get<Number>(enum_value.value)) : ix;
             enoom.values.emplace_back(enum_value.label, value);
         }
     } else if (is_tagged_union) {
@@ -921,6 +942,12 @@ BindResult bind(ASTNode n, Module &impl)
 }
 
 template<>
+BindResult bind(ASTNode, Nullptr &)
+{
+    return TypeRegistry::void_;
+}
+
+template<>
 BindResult bind(ASTNode n, Parameter &impl)
 {
     return get<TypeType>(try_bind(impl.type_name)).type;
@@ -1019,7 +1046,7 @@ BindResult bind(ASTNode n, UnaryExpression &impl)
         if (is<ReferenceType>(operand_type)) {
             return parser.bind_error(n->location, L"Cannot take address of reference");
         }
-        if (is<Constant>(n)) {
+        if (is_constant(n)) {
             return parser.bind_error(n->location, L"Cannot take address of constant");
         }
         return TypeRegistry::the().referencing(operand_type);

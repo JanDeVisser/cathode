@@ -786,13 +786,14 @@ public:
 
     Bookmark bookmark() const
     {
+        trace("Bookmarking token #{}", m_lookback.size());
         return m_lookback.size();
     }
 
     void push_back(Bookmark const &bookmark)
     {
         while (m_lookback.size() != bookmark) {
-            push_back(m_lookback.back());
+            pushed_back.push_back(m_lookback.back());
             m_lookback.pop_back();
         }
     }
@@ -895,6 +896,14 @@ public:
     std::optional<Token> accept_identifier()
     {
         if (auto ret = peek(); !ret.is_identifier()) {
+            return {};
+        }
+        return lex();
+    }
+
+    std::optional<Token> accept_number()
+    {
+        if (auto ret = peek(); ret.kind != TokenKind::Number) {
             return {};
         }
         return lex();

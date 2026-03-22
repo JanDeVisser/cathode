@@ -61,29 +61,4 @@ EnumResult<CommentType> CommentType_from_string(std::string_view const &type)
     return std::unexpected(NoSuchEnumValue { "CommentType", std::string(type) });
 }
 
-std::string NumberType_name(NumberType type)
-{
-    switch (type) {
-#undef S
-#define S(T)            \
-    case NumberType::T: \
-        return #T;
-        NUMBERTYPES(S)
-#undef S
-    default:
-        UNREACHABLE();
-    }
-}
-
-EnumResult<NumberType> NumberType_from_string(std::string_view const &type)
-{
-#undef S
-#define S(T)        \
-    if (type == #T) \
-        return NumberType::T;
-    NUMBERTYPES(S)
-#undef S
-    return std::unexpected(NoSuchEnumValue { "NumberType", std::string(type) });
-}
-
 }

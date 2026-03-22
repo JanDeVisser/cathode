@@ -201,14 +201,15 @@ inline std::basic_string<Char> join(std::vector<std::basic_string_view<Char>> co
 template<std::integral Int>
 [[nodiscard]] inline std::string integer_to_string(Int integer, int radix = 10, char grouping_char = '\0')
 {
+    using UInt = std::make_unsigned<Int>::type;
+
     thread_local static char buf[128];
-    char                    *ptr = &buf[127];
+
+    int   ix = 0;
+    UInt  integer_pos = integer;
+    char *ptr = &buf[127];
+
     *ptr = 0;
-
-    int ix = 0;
-
-    typedef typename std::make_unsigned<Int>::type UInt;
-    UInt                                           integer_pos = integer;
     if (std::is_signed_v<Int> && (integer < 0))
         integer_pos = -integer;
 
@@ -231,6 +232,10 @@ template<std::integral Int, typename Str = std::string>
     int sign = 1;
     for (start = 0; isspace(s[start]) && start < s.length(); ++start)
         ;
+    if (start >= s.length()) {
+        return {};
+    }
+
     auto ch = s[start];
     if (ch == '-') {
         if (std::is_unsigned_v<Int>) {
@@ -242,7 +247,7 @@ template<std::integral Int, typename Str = std::string>
 
     switch (ch) {
     case '0': {
-        if (start < s.length() - 2) {
+        if (start < static_cast<int>(s.length()) - 2) {
             switch (toupper(s[start + 1])) {
             case 'X': {
                 if (radix != 0 && radix != 16)

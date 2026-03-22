@@ -706,6 +706,15 @@ struct QBEValue {
     {
         return reinterpret_cast<T const *>(operator intptr_t());
     }
+
+    operator std::wstring() const
+    {
+        Slice slice { *(reinterpret_cast<Slice *>(operator intptr_t())) };
+        return std::wstring {
+            reinterpret_cast<wchar_t *>(slice.ptr),
+            static_cast<size_t>(slice.size)
+        };
+    }
 };
 
 QBEValue evaluate(QBEValue const &lhs, Operator op, QBEValue const &rhs);
@@ -891,21 +900,14 @@ std::expected<void, std::wstring>      compile_qbe(ILProgram const &program);
 ExecutionResult                        execute_qbe(VM &vm, ILFile const &file, ILFunction const &function, std::vector<QBEValue> const &args);
 ExecutionResult                        execute_qbe(VM &vm);
 bool                                   native_call(std::string_view name, uint8_t *params, std::vector<ILType> const &types, uint8_t *return_value, ILType const &return_type);
-Value                                  infer_value(VM const &vm, QBEValue const &val);
 std::wostream                         &operator<<(std::wostream &os, ILFunction const &function);
 std::wostream                         &operator<<(std::wostream &os, ILFile const &file);
 std::wostream                         &operator<<(std::wostream &os, QBEValue const &value);
 
 template<typename T>
-Value as_value(VM const &vm, QBEValue const &val)
+T as(VM const &vm, QBEValue const &val)
 {
     std::unreachable();
-}
-
-template<>
-inline Value as_value<Slice>(VM const &vm, QBEValue const &val)
-{
-    return make_value(*(static_cast<Slice *>(val)));
 }
 
 }
@@ -1036,24 +1038,24 @@ struct std::formatter<Lia::QBE::QBEValue, wchar_t> {
     using QBEValue = Lia::QBE::QBEValue;
 
     bool with_type { false };
+    int  radix { 10 };
 
     template<class ParseContext>
     constexpr ParseContext::iterator parse(ParseContext &ctx)
     {
         auto it = ctx.begin();
-        if (it == ctx.end() || *it == '}')
-            return it;
-
-        switch (*it) {
-        case 't':
-            with_type = true;
-            break;
-        default:
-            throw std::format_error("Invalid format args for Value");
-        }
-        ++it;
-        if (it != ctx.end() && *it != '}') {
-            throw std::format_error("Invalid format args for Value");
+        while (it != ctx.end() && *it != '}') {
+            switch (*it) {
+            case 't':
+                with_type = true;
+                break;
+            case 'x':
+                radix = 16;
+                break;
+            default:
+                throw std::format_error("Invalid format args for Value");
+            }
+            ++it;
         }
         return it;
     }
@@ -1069,7 +1071,14 @@ struct std::formatter<Lia::QBE::QBEValue, wchar_t> {
                 },
                 value.payload);
         }
-        out << value;
+        switch (radix) {
+        case 16:
+            out << "0x" << std::hex << value;
+            break;
+        default:
+            out << value;
+            break;
+        }
         return std::ranges::copy(std::move(out).str(), ctx.out()).out;
     }
 };

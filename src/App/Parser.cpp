@@ -367,6 +367,39 @@ std::wstring_view Parser::text_of(TokenLocation const &location) const
     return L"";
 }
 
+ASTNode parse_number(Parser &parser, Parser::Token number)
+{
+    std::wstring_view frac { L"" };
+    std::wstring_view exponent { L"" };
+
+    parser.lexer.lex();
+    if (parser.lexer.accept_symbol('.')) {
+        if (auto frac_maybe { parser.lexer.accept_number() }; frac_maybe) {
+            frac = parser.text_of(*frac_maybe);
+        }
+    }
+
+    auto bm { parser.lexer.bookmark() };
+    if (auto e = parser.lexer.accept_identifier(); e) {
+        auto e_text { parser.text_of(*e) };
+        if (e_text == L"e" || e_text == L"E") {
+            if (auto exp { parser.lexer.accept_number() }; exp) {
+                exponent = parser.text_of(*exp);
+            }
+        } else {
+            parser.lexer.push_back(bm);
+        }
+    }
+
+    if (!frac.empty() || !exponent.empty()) {
+        return parser.make_node<Decimal>(
+            number.location + parser.lexer.last_location,
+            parser.text_of(number), frac, exponent);
+    }
+    auto num { parser.text_of(number) };
+    return parser.make_node<Number>(number.location, parser.text_of(number), number.radix());
+}
+
 ASTNode Parser::parse_primary()
 {
     auto token = lexer.peek();
@@ -374,8 +407,7 @@ ASTNode Parser::parse_primary()
     ASTNode ret { nullptr };
     switch (token.kind) {
     case TokenKind::Number: {
-        ret = make_node<Number>(token.location, text_of(token), token.number_type());
-        lexer.lex();
+        ret = parse_number(*this, token);
         break;
     }
     case TokenKind::QuotedString: {
@@ -693,10 +725,7 @@ ASTNode Parser::parse_type()
             return {};
         }
         if (auto res = lexer.expect(TokenKind::Number); !res.has_value()) {
-            append(res.error(), "Expected array size, `0`, or `]`");
-            return {};
-        } else if (res.value().number_type() == NumberType::Decimal) {
-            append(res.error(), "Array size must be integer");
+            append(res.error(), "Expected integer array size, `0`, or `]`");
             return {};
         } else {
             if (auto err = lexer.expect_symbol(']'); !err.has_value()) {
@@ -849,12 +878,12 @@ ASTNode Parser::parse_enum()
         ASTNode value_node { nullptr };
         if (lexer.accept_symbol('=')) {
             auto value = lexer.peek();
-            if (!value.matches(TokenKind::Number) || value.number_type() == NumberType::Decimal) {
+            if (!value.matches(TokenKind::Number)) {
                 append(value.location, "Expected enum value"); // Make better
                 return {};
             }
             lexer.lex();
-            value_node = make_node<Number>(value.location, text_of(value), value.number_type());
+            value_node = make_node<Number>(value.location, text_of(value), value.radix());
         }
         values.emplace_back(make_node<EnumValue>(
             label.value().location + lexer.last_location,
@@ -1531,5 +1560,16 @@ BindError Parser::bind_error(TokenLocation location, std::string const &msg)
 {
     append(location, msg);
     return BindError { ASTStatus::BindErrors };
+}
+
+ASTNode add_node(ASTNode from, SyntaxNode impl)
+{
+    ASTNode ret = from.repo->add_node(from->location, std::move(impl));
+    if (from->ns != nullptr) {
+        ret->ns = from->ns;
+    }
+    ret->supercedes = from;
+    from->superceded_by = ret;
+    return ret;
 }
 }

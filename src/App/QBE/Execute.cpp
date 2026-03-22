@@ -72,15 +72,6 @@ QBEValue Frame::make_from_buffer(ILValue target, QBEValue val)
         target.type.inner);
 }
 
-Value infer_value(VM const &vm, QBEValue const &val)
-{
-    return std::visit(
-        [](auto const &v) -> Value {
-            return Value { v };
-        },
-        val.payload);
-}
-
 bool is_pointer(ILValue const &value)
 {
     return std::visit(
@@ -155,6 +146,7 @@ void assign(pFrame const &frame, ILValue const &val_ref, QBEValue const &v)
     std::visit(
         overloads {
             [frame, &v](ILValue::Local const &local) {
+                trace(L"Set local {} = {}", local.var, v);
                 if (frame->locals.size() < local.var + 1) {
                     frame->locals.resize(local.var + 1);
                 }
@@ -183,11 +175,13 @@ QBEValue get(pFrame const &frame, ILValue const &val_ref)
                 if (frame->locals.size() < local.var + 1) {
                     fatal("No local value with id `{}`in frame", local.var);
                 }
+                trace(L"Get local {} = {:x}", local.var, frame->locals[local.var]);
                 return frame->locals[local.var];
             },
             [&frame](ILValue::Variable const &variable) -> QBEValue {
                 if (frame->variables.contains(variable.name())) {
                     auto v = frame->variables[variable.name()];
+                    trace(L"Get variable {} = {:x}", frame->variables[variable.name()], v);
                     return v;
                 }
                 fatal(L"No variable with name `{}` in frame", variable.name());
@@ -204,6 +198,7 @@ QBEValue get(pFrame const &frame, ILValue const &val_ref)
             [&frame](ILValue::Global const &global) -> QBEValue {
                 auto const &globals = frame->vm.globals[frame->file.id];
                 if (globals.contains(global.name)) {
+                    trace(L"Get global {} = {:x}", global.name, globals.at(global.name));
                     return globals.at(global.name);
                 }
                 fatal(L"No global with name `{}`", global.name);
@@ -385,11 +380,13 @@ void Frame::dump_frame() const
 {
     trace("  Variables:");
     for (auto const &[name, val] : variables) {
-        trace(L"    {}: {:t}", name, val);
+        trace(L"    {}: {:tx}", name, val);
     }
     trace("  Locals:");
     for (auto const &[ix, l] : std::ranges::views::enumerate(locals)) {
-        trace(L"    {}: {:t}", ix, l);
+        if (ix > 0) {
+            trace(L"    {}: {:tx}", ix, l);
+        }
     }
     vm.dump_stack();
 }
@@ -655,12 +652,13 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
         name = function.parameters[ix].name;
         frame->arguments[std::format(L"param_{}", ix)] = arg;
     }
+    trace("  Global Base  = 0x{:016x}", reinterpret_cast<intptr_t>(vm.data.data()));
     for (auto const &[ix, s] : std::ranges::views::enumerate(file.strings)) {
         auto n = std::format(L"str_{}", ix + 1);
         if (!vm.globals[file.id].contains(n)) {
             assert((vm.data_pointer + (s.length() + 1) * sizeof(wchar_t)) <= VM::STACK_SIZE);
             QBEValue val { vm.data.data() + vm.data_pointer };
-            trace(L"Set global {}.{} = {}", file.id, n, val - vm.data.data());
+            trace(L"Set global {}.{} = offset 0x{:04x} ptr 0x{:016x}", file.id, n, vm.data_pointer, reinterpret_cast<intptr_t>(vm.data.data() + vm.data_pointer));
             for (auto ch : s) {
                 *((wchar_t *) (vm.data.data() + vm.data_pointer)) = ch;
                 vm.data_pointer += sizeof(wchar_t);
@@ -722,7 +720,7 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
             return std::visit(
                 overloads {
                     [&vm, &base_pointer, &function](QBEValue const &ret_value) -> ExecutionResult {
-                        trace(L"function `{}` returns `{}`", function.name, ret_value);
+                        trace(L"function `{}` returns `{:tx}`", function.name, ret_value);
                         vm.release(base_pointer);
                         vm.dump_stack();
                         return ret_value;
@@ -735,6 +733,7 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
         } else {
             if (frame->ip >= function.instructions.size()) {
                 vm.release(base_pointer);
+                trace(L"function `{}` returns `{:tx}`", function.name, res.value());
                 return get(frame, res.value());
             }
         }

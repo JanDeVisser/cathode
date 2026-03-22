@@ -109,21 +109,17 @@ enum class CommentType {
 extern std::string             CommentType_name(CommentType quote);
 extern EnumResult<CommentType> CommentType_from_string(std::string_view comment);
 
-#define NUMBERTYPES(S) \
-    S(Integer)         \
-    S(Decimal)         \
-    S(HexNumber)       \
-    S(BinaryNumber)
+#define RADIXES(S) \
+    S(Decimal, 10) \
+    S(Hex, 16)     \
+    S(Binary, 2)
 
-enum class NumberType : int {
+enum class Radix : int {
 #undef S
-#define S(T) T,
-    NUMBERTYPES(S)
+#define S(T, R) T = R,
+    RADIXES(S)
 #undef S
 };
-
-extern std::string            NumberType_name(NumberType quote);
-extern EnumResult<NumberType> NumberType_from_string(std::string_view comment);
 
 struct QuotedString {
     QuoteType quote_type;
@@ -150,7 +146,7 @@ struct LexerErrorMessage {
     TokenLocation location;
     std::string   message;
 
-    [[nodiscard]] std::string const &to_string() const
+    std::string const &to_string() const
     {
         return message;
     }
@@ -181,7 +177,7 @@ struct LexerTypes {
     using KWMatch = KeywordMatch<Keyword>;
 
     struct Token {
-        using TokenValue = std::variant<std::monostate, NumberType, QuotedString, CommentText, RawText<Char>, Char, Keyword>;
+        using TokenValue = std::variant<std::monostate, Radix, QuotedString, CommentText, RawText<Char>, Char, Keyword>;
 
         Token() = default;
         Token(Token const &) = default;
@@ -190,11 +186,11 @@ struct LexerTypes {
         TokenLocation location {};
         TokenValue    value;
 
-        static Token number(NumberType type)
+        static Token number(Radix radix)
         {
             Token ret;
             ret.kind = TokenKind::Number;
-            ret.value = type;
+            ret.value = radix;
             return ret;
         }
 
@@ -277,37 +273,37 @@ struct LexerTypes {
             return ret;
         }
 
-        [[nodiscard]] NumberType number_type() const
+        Radix radix() const
         {
             assert(kind == TokenKind::Number);
-            return std::get<NumberType>(value);
+            return std::get<Radix>(value);
         }
 
-        [[nodiscard]] Char symbol_code() const
+        Char symbol_code() const
         {
             assert(kind == TokenKind::Symbol);
             return std::get<Char>(value);
         }
 
-        [[nodiscard]] Keyword keyword() const
+        Keyword keyword() const
         {
             assert(kind == TokenKind::Keyword);
             return std::get<Keyword>(value);
         }
 
-        [[nodiscard]] QuotedString const &quoted_string() const
+        QuotedString const &quoted_string() const
         {
             assert(kind == TokenKind::QuotedString);
             return std::get<QuotedString>(value);
         }
 
-        [[nodiscard]] CommentText const &comment_text() const
+        CommentText const &comment_text() const
         {
             assert(kind == TokenKind::Comment);
             return std::get<CommentText>(value);
         }
 
-        [[nodiscard]] RawText<Char> const &raw_text() const
+        RawText<Char> const &raw_text() const
         {
             assert(kind == TokenKind::Raw);
             return std::get<RawText<Char>>(value);
@@ -333,10 +329,10 @@ struct LexerTypes {
             return !matches_symbol(s);
         }
 
-        [[nodiscard]] bool matches(TokenKind k) const { return kind == k; }
-        [[nodiscard]] bool matches_symbol(Char symbol) const { return matches(TokenKind::Symbol) && this->symbol_code() == symbol; }
-        [[nodiscard]] bool matches_keyword(Keyword kw) const { return matches(TokenKind::Keyword) && this->keyword() == kw; }
-        [[nodiscard]] bool is_identifier() const { return matches(TokenKind::Identifier); }
+        bool matches(TokenKind k) const { return kind == k; }
+        bool matches_symbol(Char symbol) const { return matches(TokenKind::Symbol) && this->symbol_code() == symbol; }
+        bool matches_keyword(Keyword kw) const { return matches(TokenKind::Keyword) && this->keyword() == kw; }
+        bool is_identifier() const { return matches(TokenKind::Identifier); }
     };
 
     using LexerResult = std::expected<Token, LexerErrorMessage>;
@@ -559,7 +555,7 @@ struct LexerTypes {
         std::optional<ScanResult> scan(Buffer const &buffer, size_t index)
         {
             // std::cout << "NumberScanner\n";
-            auto type = NumberType::Integer;
+            auto radix = Radix::Decimal;
             auto ix = index;
             auto cur = buffer[ix];
             if (!isdigit(cur)) {
@@ -569,38 +565,27 @@ struct LexerTypes {
             if (ix < buffer.length() - 1 && cur == '0') {
                 if (buffer[ix + 1] == 'x' || buffer[ix + 1] == 'X') {
                     if (ix == buffer.length() - 2 || !isxdigit(buffer[ix + 2])) {
-                        return ScanResult { Token::number(NumberType::Integer), ix - index + 1 };
+                        return ScanResult { Token::number(Radix::Decimal), ix - index + 1 };
                     }
-                    type = NumberType::HexNumber;
+                    radix = Radix::Hex;
                     predicate = isxdigit;
                     ix = ix + 2;
                 } else if (buffer[ix + 1] == 'b' || buffer[ix + 1] == 'B') {
                     if (ix == buffer.length() - 2 || !isbdigit(buffer[ix + 2])) {
-                        return ScanResult { Token::number(NumberType::Integer), ix - index + 1 };
+                        return ScanResult { Token::number(Radix::Decimal), ix - index + 1 };
                     }
-                    type = NumberType::BinaryNumber;
+                    radix = Radix::Binary;
                     predicate = isbdigit;
                     ix = ix + 2;
                 }
             }
             for (; ix < buffer.length(); ++ix) {
                 Char const ch = buffer[ix];
-                if (!predicate(ch) && ((ch != '.') || (type == NumberType::Decimal))) {
-                    // Special handling of `0..10`
-                    if (ch == '.' && buffer[ix - 1] == '.') {
-                        type = NumberType::Integer;
-                        --ix;
-                    }
+                if (!predicate(ch)) {
                     break;
                 }
-                if (ch == '.') {
-                    if (type != NumberType::Integer) {
-                        break;
-                    }
-                    type = NumberType::Decimal;
-                }
             }
-            return ScanResult { Token::number(type), ix - index };
+            return ScanResult { Token::number(radix), ix - index };
         }
     };
 
@@ -799,15 +784,16 @@ public:
         return ret;
     }
 
-    [[nodiscard]] Bookmark bookmark() const
+    Bookmark bookmark() const
     {
+        trace("Bookmarking token #{}", m_lookback.size());
         return m_lookback.size();
     }
 
     void push_back(Bookmark const &bookmark)
     {
         while (m_lookback.size() != bookmark) {
-            push_back(m_lookback.back());
+            pushed_back.push_back(m_lookback.back());
             m_lookback.pop_back();
         }
     }
@@ -915,6 +901,14 @@ public:
         return lex();
     }
 
+    std::optional<Token> accept_number()
+    {
+        if (auto ret = peek(); ret.kind != TokenKind::Number) {
+            return {};
+        }
+        return lex();
+    }
+
     bool next_matches(TokenKind kind)
     {
         auto n = peek();
@@ -927,7 +921,7 @@ public:
         return n.matches_symbol(symbol);
     }
 
-    [[nodiscard]] bool exhausted() const
+    bool exhausted() const
     {
         return m_sources.empty();
     }
@@ -942,7 +936,7 @@ public:
         m_lookback.pop_back();
     }
 
-    [[nodiscard]] TokenLocation const &location() const
+    TokenLocation const &location() const
     {
         assert(!m_sources.empty());
         return m_sources.back().location();
@@ -955,7 +949,7 @@ private:
 
     class Source {
     public:
-        [[nodiscard]] TokenLocation const &location() const
+        TokenLocation const &location() const
         {
             return m_location;
         }
@@ -1042,17 +1036,17 @@ private:
             return m_buffer[ix];
         }
 
-        [[nodiscard]] std::basic_string_view<Char> substr(size_t pos, size_t len = std::basic_string_view<Char>::npos) const
+        std::basic_string_view<Char> substr(size_t pos, size_t len = std::basic_string_view<Char>::npos) const
         {
             return m_buffer.substr(pos, len);
         }
 
-        [[nodiscard]] size_t length() const
+        size_t length() const
         {
             return m_buffer.length();
         }
 
-        [[nodiscard]] bool exhausted() const
+        bool exhausted() const
         {
             return m_index >= length();
         }

@@ -93,9 +93,10 @@ add_library(
     LiaLang
     STATIC
     src/App/Bind.cpp
-    src/App/Config.cpp
     src/App/Coerce.cpp
+    src/App/Config.cpp
     src/App/Dump.cpp
+    src/App/Fold.cpp
     src/App/Keyword.cpp
     src/App/Namespace.cpp
     src/App/Normalize.cpp
@@ -105,7 +106,6 @@ add_library(
     src/App/Stamp.cpp
     src/App/SyntaxNode.cpp
     src/App/Type.cpp
-    src/App/Value.cpp
     src/App/QBE/Context.cpp
     src/App/QBE/Execute.cpp
     src/App/QBE/Expr.cpp

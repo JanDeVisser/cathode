@@ -253,18 +253,19 @@ std::expected<JSONValue, JSONError> decode_value(JSONLexer &lexer, std::string_v
         return JSONValue { TRY_EVAL(decode_string(token)) };
     }
     case TokenKind::Number: {
-        switch (token.number_type()) {
-        case NumberType::Decimal: {
-            auto dbl_maybe = string_to_double(std::string(str.substr(token.location.index, token.location.length)));
+        if (lexer.accept_symbol('.')) {
+            std::string dbl_text { str.substr(token.location.index, token.location.length) };
+            if (auto frac { lexer.accept_number() }; frac) {
+                dbl_text += ".";
+                dbl_text += str.substr((*frac).location.index, (*frac).location.length);
+            }
+            auto dbl_maybe = string_to_double(dbl_text);
             assert(dbl_maybe.has_value());
             return JSONValue(dbl_maybe.value());
         }
-        default: {
-            auto int_maybe = string_to_integer<long>(str.substr(token.location.index, token.location.length));
-            assert(int_maybe.has_value());
-            return JSONValue(int_maybe.value());
-        }
-        }
+        auto int_maybe = string_to_integer<long>(str.substr(token.location.index, token.location.length));
+        assert(int_maybe.has_value());
+        return JSONValue(int_maybe.value());
     }
     case TokenKind::Keyword: {
         switch (token.keyword()) {

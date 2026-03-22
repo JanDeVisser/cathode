@@ -19,7 +19,6 @@
 #include <App/Operator.h>
 #include <App/SyntaxNode.h>
 #include <App/Type.h>
-#include <App/Value.h>
 
 #include <App/Parser.h>
 #include <App/QBE/QBE.h>

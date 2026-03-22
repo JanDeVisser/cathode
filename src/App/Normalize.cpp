@@ -74,29 +74,6 @@ ASTNode normalize(ASTNode n, BinaryExpression const &impl)
         return make_node<ExpressionList>(n, nodes);
     };
 
-    auto const_evaluate = [n](ASTNode lhs, Operator op, ASTNode rhs) -> ASTNode {
-        auto const &lhs_const = std::get_if<Constant>(&lhs->node);
-        if (lhs_const == nullptr || !lhs_const->bound_value) {
-            return make_node<BinaryExpression>(n, lhs, op, rhs);
-        }
-        if (op == Operator::Cast) {
-            if (is<TypeSpecification>(rhs)) {
-                if (auto const cast_type = resolve(rhs); cast_type != nullptr) {
-                    if (auto const coerced_maybe = lhs_const->bound_value.value().coerce(cast_type); coerced_maybe) {
-                        return make_node<Constant>(n, *coerced_maybe);
-                    }
-                    n.repo->append(n->location, L"Cannot cast value to `{}`", cast_type);
-                    return nullptr;
-                }
-            }
-        }
-        if (auto const &rhs_const = std::get_if<Constant>(&rhs->node); rhs_const != nullptr && rhs_const->bound_value) {
-            auto ret = evaluate(lhs_const->bound_value.value(), op, rhs_const->bound_value.value());
-            return make_node<Constant>(n, ret);
-        }
-        return make_node<BinaryExpression>(n, lhs, op, rhs);
-    };
-
     switch (impl.op) {
     case Operator::Call: {
         auto arg_list = normalize(impl.rhs);
@@ -120,13 +97,11 @@ ASTNode normalize(ASTNode n, BinaryExpression const &impl)
     case Operator::Sequence:
         return make_expression_list();
     case Operator::MemberAccess: {
-        auto aggregate = normalize(impl.lhs);
-        auto member = normalize(impl.rhs);
-        if (is<Constant>(member)) {
-            auto const &constant = get<Constant>(member);
-            if (constant.bound_value && constant.bound_value->type == TypeRegistry::string) {
-                member = make_node<Identifier>(member, constant.bound_value->to_string());
-            }
+        auto aggregate { normalize(impl.lhs) };
+        auto member { normalize(impl.rhs) };
+        if (is<QuotedString>(member)) {
+            auto const &qs { get<QuotedString>(member) };
+            member = make_node<Identifier>(member, qs.string.substr(1, qs.string.length() - 2));
         }
         return make_node<BinaryExpression>(n, aggregate, impl.op, member);
     } break;
@@ -141,7 +116,11 @@ ASTNode normalize(ASTNode n, BinaryExpression const &impl)
                 normalize(impl.rhs));
             return make_node<BinaryExpression>(n, impl.lhs, Operator::Assign, normalize(bin_expr));
         }
-        return const_evaluate(normalize(impl.lhs), impl.op, normalize(impl.rhs));
+        auto normalized = make_node<BinaryExpression>(n, normalize(impl.lhs), impl.op, normalize(impl.rhs));
+        if (auto folded = fold(normalized); folded != nullptr) {
+            return folded;
+        }
+        return normalized;
     }
 }
 
@@ -151,12 +130,6 @@ ASTNode normalize(ASTNode n, Block const &impl)
     const_cast<ASTNode &>(n)->init_namespace();
     auto ret = make_node<Block>(n, normalize(impl.statements));
     return ret;
-}
-
-template<>
-ASTNode normalize(ASTNode n, BoolConstant const &impl)
-{
-    return make_node<Constant>(n, Value { impl.value });
 }
 
 template<>
@@ -206,7 +179,7 @@ ASTNode normalize(ASTNode n, Embed const &impl)
     if (auto contents_maybe = read_file_by_name<wchar_t>(fname); contents_maybe.has_value()) {
         info(L"Embedding `{}`", impl.file_name);
         auto const &contents = contents_maybe.value();
-        return make_node<Constant>(n, make_value(contents));
+        return make_node<QuotedString>(n, contents, QuoteType::DoubleQuote);
     } else {
         n.error("Could not open `{}`: {}", fname, contents_maybe.error().to_string());
         return nullptr;
@@ -328,35 +301,6 @@ ASTNode normalize(ASTNode n, Module const &impl)
 }
 
 template<>
-ASTNode normalize(ASTNode n, Nullptr const &)
-{
-    return make_node<Constant>(n, Value { nullptr });
-}
-
-template<>
-ASTNode normalize(ASTNode n, Number const &impl)
-{
-    switch (impl.number_type) {
-    case NumberType::Decimal: {
-        char      *end_ptr;
-        auto const narrow_string = as_utf8(impl.number);
-        auto const value = strtod(narrow_string.data(), &end_ptr);
-        assert(end_ptr != narrow_string.data());
-        return make_node<Constant>(n, Value { value });
-    }
-    default: {
-        auto const value = string_to_integer<int64_t>(impl.number)
-                               .or_else([&impl]() -> std::optional<int64_t> {
-                                   fatal(L"Could not convert string `{}` to integer. This is unexpected", impl.number);
-                                   return { 0 };
-                               })
-                               .value();
-        return make_node<Constant>(n, Value { value });
-    }
-    }
-}
-
-template<>
 ASTNode normalize(ASTNode n, Parameter const &impl)
 {
     return make_node<Parameter>(n, impl.name, normalize(impl.type_name));
@@ -428,11 +372,11 @@ ASTNode normalize(ASTNode n, QuotedString const &impl)
 
     switch (impl.quote_type) {
     case QuoteType::DoubleQuote:
-        return make_node<Constant>(n, make_value(unescape(impl.string)));
+        return make_node<String>(n, unescape(impl.string));
     case QuoteType::BackQuote:
-        return make_node<Constant>(n, make_cstring(as_utf8(unescape(impl.string))));
+        return make_node<CString>(n, as_utf8(unescape(impl.string)));
     case QuoteType::SingleQuote:
-        return make_node<Constant>(n, Value { impl.string[1] });
+        return make_node<Number>(n, static_cast<uint64_t>(impl.string[1]));
     default:
         UNREACHABLE();
     }
@@ -496,19 +440,11 @@ ASTNode normalize(ASTNode n, TypeSpecification const &impl)
 template<>
 ASTNode normalize(ASTNode n, UnaryExpression const &impl)
 {
-    auto normalized_operand = normalize(impl.operand);
-    if (auto *operand_const = get_if<Constant>(normalized_operand); operand_const != nullptr) {
-        auto res = evaluate(impl.op, operand_const->bound_value.value());
-        return make_node<Constant>(n, res);
+    auto normalized { make_node<UnaryExpression>(n, impl.op, normalize(impl.operand)) };
+    if (auto folded { fold(normalized) }; folded != nullptr) {
+        return folded;
     }
-    if (impl.op == Operator::Sizeof) {
-        if (is<TypeSpecification>(normalized_operand)) {
-            if (auto const type_maybe = resolve(normalized_operand); type_maybe != nullptr) {
-                return make_node<Constant>(n, static_cast<int64_t>(type_maybe->size_of()));
-            }
-        }
-    }
-    return n;
+    return normalized;
 }
 
 template<>
@@ -574,5 +510,4 @@ ASTNodes normalize(ASTNodes nodes)
         });
     return normalized;
 }
-
 }

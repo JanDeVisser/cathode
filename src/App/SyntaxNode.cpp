@@ -21,7 +21,6 @@
 #include <App/Parser.h>
 #include <App/SyntaxNode.h>
 #include <App/Type.h>
-#include <App/Value.h>
 
 namespace Lia {
 
@@ -89,6 +88,14 @@ void ASTNodeImpl::init_namespace()
     parser.push_namespace(id);
 }
 
+bool is_constant(ASTNode const &n)
+{
+    return std::visit([](auto const &impl) -> bool {
+        return is_constant<decltype(impl)>();
+    },
+        n->node);
+}
+
 Block::Block(ASTNodes statements)
     : statements(std::move(statements))
 {
@@ -105,23 +112,41 @@ Comptime::Comptime(std::wstring_view script_text, ASTNode const &block)
 {
 }
 
-Constant::Constant(Value value)
-    : bound_value(std::move(value))
-{
-}
-
 BoolConstant::BoolConstant(bool value)
     : value(value)
 {
+}
+Decimal::Decimal(std::wstring_view whole, std::wstring_view fraction, std::wstring_view exponent)
+{
+    std::string s = as_utf8(whole);
+    if (!fraction.empty()) {
+        s += ".";
+        s += as_utf8(fraction);
+    }
+    if (!exponent.empty()) {
+        s += "E";
+        s += as_utf8(exponent);
+    }
+    auto dbl { string_to_double(s) };
+    assert(dbl);
+    value = *dbl;
 }
 
 Nullptr::Nullptr()
 {
 }
 
-Number::Number(std::wstring_view number, NumberType type)
-    : number(number)
-    , number_type(type)
+Number::Number(std::wstring_view number, Radix radix)
+{
+    if (auto v = string_to_integer<int64_t>(number, static_cast<int>(radix)); v) {
+        value = *v;
+    } else {
+        fatal(L"Cannot parse `{}` as an integer with radix `{}`", number, static_cast<int>(radix));
+    }
+}
+
+Number::Number(Int value)
+    : value(value)
 {
 }
 

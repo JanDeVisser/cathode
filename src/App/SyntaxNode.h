@@ -10,6 +10,7 @@
 #include <expected>
 #include <map>
 #include <ostream>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -20,7 +21,6 @@
 
 #include <App/Operator.h>
 #include <App/Type.h>
-#include <App/Value.h>
 
 namespace Lia {
 
@@ -34,8 +34,9 @@ using namespace Util;
     S(Break)               \
     S(Call)                \
     S(Comptime)            \
-    S(Constant)            \
     S(Continue)            \
+    S(CString)             \
+    S(Decimal)             \
     S(DeferStatement)      \
     S(Embed)               \
     S(Enum)                \
@@ -59,6 +60,7 @@ using namespace Util;
     S(QuotedString)        \
     S(Return)              \
     S(StampedIdentifier)   \
+    S(String)              \
     S(Struct)              \
     S(StructMember)        \
     S(TagValue)            \
@@ -225,16 +227,20 @@ struct Comptime {
     explicit Comptime(std::wstring_view script_text, ASTNode const &block = nullptr);
 };
 
-struct Constant {
-    std::optional<Value> bound_value {};
-
-    explicit Constant(Value value);
-};
-
 struct Continue {
     Label label;
 
     Continue(Label label);
+};
+
+struct CString {
+    std::string string;
+};
+
+struct Decimal {
+    double value;
+
+    Decimal(std::wstring_view whole, std::wstring_view fraction = L"", std::wstring_view exponent = L"");
 };
 
 struct DeferStatement {
@@ -356,11 +362,62 @@ struct Nullptr {
 };
 
 struct Number {
-    std::wstring number;
-    NumberType   number_type;
+    using Int = std::variant<uint64_t, int64_t, uint32_t, int32_t, uint16_t, int16_t, uint8_t, int8_t>;
+    Int value;
 
-    Number(std::wstring_view number, NumberType type);
+    Number(std::wstring_view number, Radix radix);
+    Number(Int value);
+
+    Number(std::integral auto value)
+        : value(value)
+    {
+    }
+
+    Number(IntType const &type, auto v)
+    {
+        if (type.is_signed) {
+            switch (type.width_bits) {
+            case 8:
+                value.emplace<int8_t>(v);
+                break;
+            case 16:
+                value.emplace<int16_t>(v);
+                break;
+            case 32:
+                value.emplace<int32_t>(v);
+                break;
+            case 64:
+                value.emplace<int64_t>(v);
+                break;
+            }
+        } else {
+            switch (type.width_bits) {
+            case 8:
+                value.emplace<uint8_t>(v);
+                break;
+            case 16:
+                value.emplace<uint16_t>(v);
+                break;
+            case 32:
+                value.emplace<uint32_t>(v);
+                break;
+            case 64:
+                value.emplace<uint64_t>(v);
+                break;
+            }
+        }
+    }
 };
+
+template<std::integral T>
+T get(Number const &number)
+{
+    return std::visit(
+        [](auto v) -> T {
+            return static_cast<T>(v);
+        },
+        number.value);
+}
 
 struct Parameter {
     std::wstring name;
@@ -404,6 +461,10 @@ struct StampedIdentifier {
     ASTNodes     arguments;
 
     explicit StampedIdentifier(std::wstring_view identifier, ASTNodes arguments);
+};
+
+struct String {
+    std::wstring string;
 };
 
 struct StructMember {
@@ -541,6 +602,27 @@ concept is_component = std::is_same_v<N, Program> || std::is_same_v<N, Module>;
 template<class N>
 concept is_identifier = std::is_same_v<N, Identifier> || std::is_same_v<N, StampedIdentifier>;
 
+template<typename N>
+concept Constant = std::is_same_v<N, Number>
+    || std::is_same_v<N, Decimal>
+    || std::is_same_v<N, BoolConstant>
+    || std::is_same_v<N, QuotedString>
+    || std::is_same_v<N, Void>;
+
+template<typename N>
+bool is_constant()
+{
+    return false;
+}
+
+template<Constant N>
+bool is_constant()
+{
+    return true;
+}
+
+bool is_constant(ASTNode const &n);
+
 using SyntaxNode = std::variant<Dummy,
     BinaryExpression,
     Block,
@@ -548,8 +630,9 @@ using SyntaxNode = std::variant<Dummy,
     Break,
     Call,
     Comptime,
-    Constant,
     Continue,
+    CString,
+    Decimal,
     DeferStatement,
     Embed,
     Enum,
@@ -573,6 +656,7 @@ using SyntaxNode = std::variant<Dummy,
     QuotedString,
     Return,
     StampedIdentifier,
+    String,
     Struct,
     StructMember,
     TagValue,
@@ -595,6 +679,11 @@ struct ASTNodeImpl {
     ASTNode       superceded_by;
     NodeTag       tag { false };
 
+    ASTNodeImpl(SyntaxNode impl)
+        : node(std::move(impl))
+    {
+    }
+
     template<class N, typename... Args>
     static ASTNodeImpl make(TokenLocation const &loc, Args... args)
     {
@@ -606,9 +695,7 @@ struct ASTNodeImpl {
     template<class N>
     static ASTNodeImpl make(N impl)
     {
-        ASTNodeImpl ret;
-        ret.node = std::move(impl);
-        return ret;
+        return ASTNodeImpl { SyntaxNode { std::move(impl) } };
     }
 
     template<class N, typename... Args>
@@ -619,8 +706,15 @@ struct ASTNodeImpl {
         return ret;
     }
 
-    [[nodiscard]] SyntaxNodeType type() const { return static_cast<SyntaxNodeType>(node.index()); }
-    void                         init_namespace();
+    template<typename N>
+    static ASTNodeImpl make(SyntaxNode impl)
+    {
+        assert(std::holds_alternative<N>(impl));
+        return { impl };
+    }
+
+    SyntaxNodeType type() const { return static_cast<SyntaxNodeType>(node.index()); }
+    void           init_namespace();
 
 private:
     ASTNodeImpl() = default;
@@ -732,6 +826,7 @@ BindResult   bind(ASTNode node);
 ASTNode      coerce(ASTNode node, pType const &type);
 ASTNode      stamp(ASTNode node);
 ASTNodes     stamp(ASTNodes nodes);
+ASTNode      fold(ASTNode node);
 
 }
 

@@ -243,7 +243,7 @@ IfStatement::IfStatement(ASTNode condition, ASTNode if_branch, ASTNode else_bran
     assert(condition != nullptr && if_branch != nullptr);
 }
 
-Import::Import(std::wstring file_name)
+Import::Import(Strings file_name)
     : file_name(std::move(file_name))
 {
 }
@@ -287,6 +287,12 @@ Module::Module(std::wstring name, std::wstring source, ASTNodes const &statement
     : name(std::move(name))
     , source(std::move(source))
     , statements(statements)
+{
+}
+
+ModuleProxy::ModuleProxy(std::wstring name, ASTNode module)
+    : name(std::move(name))
+    , module(std::move(module))
 {
 }
 

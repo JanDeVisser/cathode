@@ -5,14 +5,22 @@
  */
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
+#include <string>
+#include <string_view>
 
+#include <Util/StringUtil.h>
+
+#include <App/Config.h>
 #include <App/Operator.h>
 #include <App/Parser.h>
 #include <App/SyntaxNode.h>
-#include <string>
 
 namespace Lia {
+
+namespace fs = std::filesystem;
+using namespace std::literals;
 
 template<class N>
 ASTNode normalize(ASTNode n, N const &impl)
@@ -148,7 +156,7 @@ ASTNode normalize(ASTNode n, Comptime const &impl)
 
     auto synthetic_return_type = parser.make_node<TypeSpecification>(
         n->location,
-        TypeNameNode { L"string", ASTNodes {} });
+        TypeNameNode { { L"string" }, ASTNodes {} });
     auto synthetic_decl = parser.make_node<FunctionDeclaration>(
         n->location,
         std::format(L"comptime-{}", *(n.id)),
@@ -244,25 +252,52 @@ ASTNode normalize(ASTNode n, IfStatement const &impl)
 template<>
 ASTNode normalize(ASTNode n, Import const &impl)
 {
-    auto fname = impl.file_name;
-    for (auto ix = 0; ix < fname.length(); ++ix) {
-        if (fname[ix] == '.')
-            fname[ix] = '/';
+    assert(!impl.file_name.empty());
+    auto     fname { join(impl.file_name, L"/"sv) };
+    fs::path path {};
+    for (auto const &elem : impl.file_name) {
+        path += elem;
     }
-    if (!fname.ends_with(L".lia")) {
-        fname += L".lia";
+    path.concat(".lia");
+    if (!fs::exists(path)) {
+        path = lia_dir() / "share" / path;
     }
-    if (auto contents_maybe = read_file_by_name<wchar_t>(as_utf8(fname)); contents_maybe.has_value()) {
-        info(L"Importing module `{}`", impl.file_name);
-        auto const &contents = contents_maybe.value();
-        Parser     &parser { *(n.repo) };
-        auto        module = parse<Module>(parser, std::move(contents), as_utf8(impl.file_name));
-        if (module) {
-            module->location = n->location;
-            return parser.make_node<Dummy>(n->location);
+    Parser &parser { *(n.repo) };
+
+    NSNode &ns { parser.namespaces.back() };
+    ASTNode proxy;
+    for (auto const &elem : impl.file_name) {
+        if (proxy = ns->find_module(elem); proxy != nullptr) {
+            ns = proxy->ns;
+        } else if (!ns->contains(elem)) {
+            proxy = parser.make_node<ModuleProxy>(n->location, elem);
+            proxy->init_namespace();
+            parser.pop_namespace(proxy);
+            ns->register_module(elem, proxy);
+            ns = proxy->ns;
         }
-    } else {
-        n.error(L"Could not open import file `{}`", fname);
+    }
+
+    ASTNode module { nullptr };
+    for (auto const &[name, m] : parser.modules) {
+        if (name == fname) {
+            module = m;
+            break;
+        }
+    }
+
+    if (module == nullptr) {
+        if (auto contents_maybe = read_file_by_name<wchar_t>(path.string()); contents_maybe.has_value()) {
+            info("Importing module `{}`", path.string());
+            auto const &contents = contents_maybe.value();
+            module = parse<Module>(parser, std::move(contents), path.string());
+            get<ModuleProxy>(proxy).module = module;
+        } else {
+            n.error(L"Could not open import `{}`", impl.file_name);
+        }
+    }
+    if (module) {
+        return proxy;
     }
     return n;
 }

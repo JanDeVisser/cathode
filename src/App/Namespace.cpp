@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <functional>
+#include "Util/Utf8.h"
+#include <ranges>
 
 #include <App/Parser.h>
 #include <App/SyntaxNode.h>
+#include <App/Type.h>
 
 namespace Lia {
 
@@ -17,24 +19,98 @@ Namespace::Namespace(ASTNode node, NSNode parent)
 {
 }
 
-bool Namespace::is_registered(std::wstring const &name) const
+bool Namespace::contains(std::wstring const &name) const
 {
-    if (has_type(name)) {
+    if (node && is<ModuleProxy>(node)) {
+        auto proxy { get<ModuleProxy>(node) };
+        if (proxy.module && proxy.module->ns->contains(name)) {
+            return true;
+        }
+    }
+    if (entries.contains(name)) {
         return true;
     }
-    if (has_variable(name)) {
-        return true;
+    if (parent != nullptr) {
+        return parent->contains(name);
     }
-    return has_function(name);
+    return false;
+}
+
+int Namespace::count(std::wstring const &name) const
+{
+    auto ret = entries.count(name);
+    if (node && is<ModuleProxy>(node)) {
+        auto proxy { get<ModuleProxy>(node) };
+        if (proxy.module) {
+            ret += proxy.module->ns->count(name);
+        }
+    }
+    if (parent != nullptr) {
+        ret += parent->count(name);
+    }
+    return ret;
+}
+
+std::optional<Namespace::NSEntry> Namespace::at(std::wstring const &name) const
+{
+    auto a { all(name) };
+    if (a.size() == 1) {
+        return a[0];
+    }
+    return {};
+}
+
+Namespace::NSEntries Namespace::all(std::wstring const &name) const
+{
+    std::vector<Namespace::NSEntry> ret {};
+    if (node && is<ModuleProxy>(node)) {
+        auto proxy { get<ModuleProxy>(node) };
+        if (proxy.module) {
+            ret.insert_range(ret.end(), proxy.module->ns->all(name));
+        }
+    }
+    if (auto it { entries.find(name) }; it != entries.end()) {
+        for (; std::get<std::wstring const>(*it) == name; ++it) {
+            ret.emplace_back(std::get<Namespace::NSEntry>(*it));
+        }
+    }
+    if (parent != nullptr) {
+        ret.insert_range(ret.end(), parent->all(name));
+    }
+    return ret;
+}
+
+ASTNode Namespace::find_module(std::wstring const &name) const
+{
+    if (auto e { at(name) }; e && e->index() == Namespace::Module) {
+        return std::get<Namespace::Module>(*e);
+    }
+    return nullptr;
+}
+
+void Namespace::register_module(std::wstring const &name, ASTNode module)
+{
+    assert(!contains(name));
+    entries.emplace(name, Namespace::NSEntry { std::in_place_index<Namespace::Module>, module });
+}
+
+bool Namespace::has_module(std::wstring const &name) const
+{
+    return find_module(name) != nullptr;
 }
 
 pType Namespace::find_type(std::wstring const &name) const
 {
-    if (has_type(name)) {
-        return types.at(name);
-    }
-    if (auto p = parent; p != nullptr) {
-        return p->find_type(name);
+    if (auto entry { at(name) }; entry) {
+        return std::visit(
+            overloads {
+                [](pType const &type) -> pType {
+                    return type;
+                },
+                [this, &name](auto const &entry) -> pType {
+                    return nullptr;
+                } },
+            *entry);
     }
     return nullptr;
 }
@@ -53,29 +129,26 @@ ASTNode Namespace::current_function() const
 
 void Namespace::register_type(std::wstring name, pType type)
 {
-    assert(!types.contains(name));
-    types[name] = std::move(type);
+    assert(!contains(name));
+    entries.emplace(name, type);
 }
 
 bool Namespace::has_type(std::wstring const &name) const
 {
-    return types.contains(name);
+    return find_type(name) != nullptr;
 }
 
 ASTNode Namespace::find_variable(std::wstring const &name) const
 {
-    if (variables.contains(name)) {
-        return variables.at(name);
-    }
-    if (auto p = parent; p != nullptr) {
-        return p->find_variable(name);
+    if (auto entry { at(name) }; entry && entry->index() == Namespace::Variable) {
+        return std::get<Namespace::Variable>(*entry);
     }
     return nullptr;
 }
 
 bool Namespace::has_variable(std::wstring const &name) const
 {
-    return variables.contains(name);
+    return find_variable(name) != nullptr;
 }
 
 pType Namespace::type_of(std::wstring const &name) const
@@ -91,110 +164,76 @@ pType Namespace::type_of(std::wstring const &name) const
     return nullptr;
 }
 
-void Namespace::register_variable(std::wstring name, ASTNode node)
+void Namespace::register_variable(std::wstring name, ASTNode variable)
 {
-    assert(!variables.contains(name));
-    variables.emplace(name, std::move(node));
+    assert(!contains(name));
+    entries.emplace(name, Namespace::NSEntry { std::in_place_index<Namespace::Variable>, variable });
 }
 
 bool Namespace::has_function(std::wstring const &name) const
 {
-    return functions.contains(name) && !functions.at(name).empty();
+    return std::ranges::any_of(all(name),
+        [](auto const &e) -> bool {
+            return e.index() == 1;
+        });
 }
 
-ASTNode Namespace::find_function_here(std::wstring name, pType const &type) const
+ASTNodes Namespace::find_functions(std::wstring const &name) const
 {
-    assert(is<FunctionType>(type));
-    if (!functions.contains(name)) {
-        return nullptr;
-    }
-    auto overloads = functions.at(name);
-    for (auto const &function : overloads) {
-        auto const &def = get<FunctionDefinition>(function);
-        if (def.declaration->bound_type == type) {
-            return function;
-        }
-    }
-    return nullptr;
+    ASTNodes ret {};
+    std::ranges::for_each(
+        all(name) | std::ranges::views::enumerate,
+        [&ret](auto const &t) {
+            auto const &[ix, e] = t;
+            if (e.index() == Namespace::Function) {
+                assert(ret.size() == ix);
+                ret.emplace_back(std::get<Namespace::Function>(e));
+            } else {
+                assert(ix == 0);
+            }
+        });
+    return ret;
 }
 
 ASTNode Namespace::find_function(std::wstring const &name, pType const &type) const
 {
-    assert(is<FunctionType>(type));
-    if (auto here = find_function_here(name, type); here != nullptr) {
-        return here;
-    }
-    if (auto p = parent; p != nullptr) {
-        return p->find_function(name, type);
-    }
-    return nullptr;
-}
-
-ASTNode Namespace::find_function_by_arg_list(std::wstring const &name, pType const &type) const
-{
-    assert(is<TypeList>(type));
-    auto const &type_descr = std::get<TypeList>(type->description);
-    if (functions.contains(name)) {
-        auto const &overloads = functions.at(name);
-        for (auto const &overload : overloads) {
-            auto const &def = get<FunctionDefinition>(overload);
-            auto const &func_type = def.declaration->bound_type;
-            if (!is<FunctionType>(func_type)) {
-                continue;
+    auto functions { find_functions(name) };
+    auto it = std::ranges::find_if(
+        functions,
+        [&type](auto const &func) -> bool {
+            FunctionDefinition const &def = get<FunctionDefinition>(func);
+            if (def.declaration->bound_type == type) {
+                return true;
             }
-            auto const &func_type_descr = std::get<FunctionType>(func_type->description);
-            if (func_type_descr.parameters == type_descr.types) {
-                return overload;
-            }
-        }
+            return false;
+        });
+    if (it == functions.end()) {
+        return nullptr;
     }
-    if (auto p = parent; p != nullptr) {
-        return p->find_function_by_arg_list(name, type);
-    }
-    return nullptr;
+    auto ret { *it };
+    ++it;
+    assert(it == functions.end());
+    return ret;
 }
 
 ASTNodes Namespace::find_overloads(std::wstring const &name, ASTNodes const &type_args) const
 {
-    std::function<void(Namespace const &, ASTNodes &)> find_them;
-    find_them = [&name, &find_them, &type_args](Namespace const &ns, ASTNodes &overloads) -> void {
-        if (ns.functions.contains(name)) {
-            auto const &overloads_of = ns.functions.at(name);
-            for (auto const &overload : overloads_of) {
-                if (get<FunctionDeclaration>(get<FunctionDefinition>(overload).declaration).generics.size() >= type_args.size()) {
-                    overloads.push_back(overload);
-                }
+    auto     functions { find_functions(name) };
+    ASTNodes ret {};
+    std::ranges::for_each(
+        find_functions(name),
+        [&ret, &type_args](auto const &node) {
+            if (get<FunctionDeclaration>(get<FunctionDefinition>(node).declaration).generics.size() >= type_args.size()) {
+                ret.emplace_back(node);
             }
-        }
-        if (auto p = ns.parent; p != nullptr) {
-            find_them(*p, overloads);
-        }
-    };
-    ASTNodes ret;
-    find_them(*this, ret);
+        });
     return ret;
 }
 
 void Namespace::register_function(std::wstring name, ASTNode fnc)
 {
-    auto const &def = get<FunctionDefinition>(fnc);
-    assert(fnc->bound_type == nullptr || find_function_here(def.name, fnc->bound_type) == nullptr);
-    functions[name].push_back(fnc);
-}
-
-void Namespace::unregister_function(std::wstring name, ASTNode const &fnc)
-{
-    assert(is<FunctionType>(fnc->bound_type));
-    if (functions.contains(name)) {
-        auto &overloads { functions.at(name) };
-        for (auto it = overloads.begin(); it != overloads.end(); ++it) {
-            auto &f = *it;
-            if (f->bound_type == fnc->bound_type) {
-                overloads.erase(it);
-                return;
-            }
-        }
-    }
+    assert(!contains(name) || has_function(name));
+    entries.emplace(name, Namespace::NSEntry { std::in_place_index<Namespace::Function>, fnc });
 }
 
 }

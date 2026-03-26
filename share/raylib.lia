@@ -1,0 +1,14 @@
+struct Color {
+    r: u8,        // Color red value
+    g: u8,        // Color green value
+    b: u8,        // Color blue value
+    a: u8,        // Color alpha value
+}
+
+func InitWindow(width: i32, height: i32, title: cstring) void -> "libraylib:InitWindow"
+func CloseWindow() void -> "libraylib:CloseWindow"
+func WindowShouldClose() bool -> "libraylib:WindowShouldClose"
+func ClearBackground(color: Color) void -> "libraylib:ClearBackground"
+func BeginDrawing() void -> "libraylib:BeginDrawing"
+func EndDrawing() void -> "libraylib:EndDrawing"
+

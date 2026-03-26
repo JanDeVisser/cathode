@@ -1,26 +1,14 @@
-struct Color {
-    r: u8,        // Color red value
-    g: u8,        // Color green value
-    b: u8,        // Color blue value
-    a: u8,        // Color alpha value
-}
-
-func InitWindow(width: i32, height: i32, title: cstring) void -> "libraylib:InitWindow"
-func CloseWindow() void -> "libraylib:CloseWindow"
-func WindowShouldClose() bool -> "libraylib:WindowShouldClose"
-func ClearBackground(color: Color) void -> "libraylib:ClearBackground"
-func BeginDrawing() void -> "libraylib:BeginDrawing"
-func EndDrawing() void -> "libraylib:EndDrawing"
+import raylib
 
 public func main() i32 {
-    InitWindow(800::i32, 600::i32, `Lia Speedrun`)
-    while (!WindowShouldClose()) {
-        BeginDrawing()
-        color: Color = { 0xFF::u8, 0::u8, 0::u8, 0xFF::u8 }
-        ClearBackground(color)
-        EndDrawing()
+    raylib.InitWindow(800::i32, 600::i32, `Lia Speedrun`)
+    while (!raylib.WindowShouldClose()) {
+        raylib.BeginDrawing()
+        color: raylib.Color = { 0xFF::u8, 0::u8, 0x0::u8, 0xFF::u8 }
+        raylib.ClearBackground(color)
+        raylib.EndDrawing()
     }
-    CloseWindow()
+    raylib.CloseWindow()
     return 0::i32
 }
 

@@ -8,10 +8,8 @@
 
 #include <algorithm>
 #include <cstddef>
-#ifdef DEBUG_NAMESPACE_STACK
-#include <ranges>
-#endif
 #include <optional>
+#include <ranges>
 #include <string_view>
 
 #include <Util/Defer.h>
@@ -27,6 +25,7 @@
 
 namespace Lia {
 
+using namespace std::literals;
 using namespace Util;
 
 std::vector<Parser::OperatorDef> Parser::operators {
@@ -741,9 +740,21 @@ ASTNode Parser::parse_type()
         }
     }
 
-    auto name = lexer.accept_identifier();
-    if (!name) {
-        append(lexer.peek(), "Expected type name");
+    Strings       name;
+    TokenLocation start = lexer.peek().location;
+    while (true) {
+        auto n = lexer.accept_identifier();
+        if (!n) {
+            append(lexer.peek(), "Expected type name");
+            name.clear();
+            break;
+        }
+        name.emplace_back(std::wstring { text_of(n.value()) });
+        if (!lexer.accept_symbol('.')) {
+            break;
+        }
+    }
+    if (name.empty()) {
         return {};
     }
     ASTNodes arguments;
@@ -769,17 +780,12 @@ ASTNode Parser::parse_type()
         }
     }
     auto type = make_node<TypeSpecification>(
-        name->location + lexer.last_location,
-        TypeNameNode { std::wstring { text_of(name.value()) }, arguments });
-    if (lexer.accept_symbol('?')) {
-        type = make_node<TypeSpecification>(
-            name->location + lexer.last_location,
-            OptionalDescriptionNode { type });
-    }
+        start + lexer.last_location,
+        TypeNameNode { std::move(name), std::move(arguments) });
     if (lexer.accept_symbol('/')) {
         if (auto error_type = parse_type(); error_type != nullptr) {
             return make_node<TypeSpecification>(
-                name->location + lexer.last_location,
+                start + lexer.last_location,
                 ResultDescriptionNode { type, error_type });
         }
         return {};
@@ -1092,7 +1098,7 @@ ASTNode Parser::parse_import()
 {
     auto import_token = lexer.lex();
     assert(import_token.matches_keyword(LiaKeyword::Import));
-    std::wstring  path;
+    Strings       path;
     TokenLocation end_location = import_token.location;
     do {
         auto ident_maybe = lexer.expect_identifier();
@@ -1100,12 +1106,11 @@ ASTNode Parser::parse_import()
             append(ident_maybe.error(), "Expected import path component");
             return {};
         }
-        path += text_of(ident_maybe);
+        path.emplace_back(text_of(ident_maybe));
         end_location = ident_maybe.value().location;
         if (!lexer.accept_symbol('.')) {
             break;
         }
-        path += '.';
     } while (true);
     return make_node<Import>(import_token.location + end_location, path);
 }
@@ -1366,81 +1371,7 @@ BindResult Parser::bind(ASTNode node)
     return s;
 }
 
-pType Parser::type_of(std::wstring const &name) const
-{
-    assert(!namespaces.empty());
-    return namespaces.back()->type_of(name);
-}
-
-bool Parser::has_function(std::wstring const &name, pType const &type) const
-{
-    assert(!namespaces.empty());
-    return namespaces.back()->find_function(name, type) != nullptr;
-}
-
-ASTNode Parser::find_function(std::wstring const &name, pType const &type) const
-{
-    assert(is<FunctionType>(type));
-    assert(!namespaces.empty());
-    return namespaces.back()->find_function(name, type);
-}
-
-ASTNode Parser::find_function_by_arg_list(std::wstring const &name, pType const &type) const
-{
-    assert(is<TypeList>(type));
-    assert(!namespaces.empty());
-    return namespaces.back()->find_function_by_arg_list(name, type);
-}
-
-ASTNodes Parser::find_overloads(std::wstring const &name, ASTNodes const &type_args) const
-{
-    assert(!namespaces.empty());
-    return namespaces.back()->find_overloads(name, type_args);
-}
-
-ASTNodes Parser::find_overloads(std::vector<std::wstring> const &names, ASTNodes const &type_args) const
-{
-    assert(!namespaces.empty());
-    assert(!names.empty());
-    switch (names.size()) {
-    case 1:
-        return find_overloads(names[0], type_args);
-    case 2: {
-        if (modules.contains(names[0])) {
-            auto const &mod = modules.at(names[0]);
-            assert(is<Module>(mod));
-            return mod->ns->find_overloads(names[1], type_args);
-        }
-        return ASTNodes {};
-    }
-    default:
-        NYI("Nested modules are not yet implemented");
-    }
-}
-
-void Parser::register_variable(std::wstring name, ASTNode node)
-{
-    assert(!namespaces.empty());
-    namespaces.back()->register_variable(std::move(name), std::move(node));
-}
-
-bool Parser::has_variable(std::wstring const &name) const
-{
-    assert(!namespaces.empty());
-    return namespaces.back()->has_variable(name);
-}
-
-void Parser::register_function(std::wstring name, ASTNode fnc)
-{
-    assert(!namespaces.empty());
-    namespaces.back()->register_function(std::move(name), std::move(fnc));
-}
-
-void Parser::unregister_function(std::wstring name, ASTNode fnc)
-{
-    assert(!namespaces.empty());
-    namespaces.back()->unregister_function(std::move(name), std::move(fnc));
-}
+// #define DEBUG_NAMESPACE_STACK
 
 void dump_namespace_stack(Parser const &parser, auto const &prefix)
 {
@@ -1456,11 +1387,102 @@ void dump_namespace_stack(Parser const &parser, auto const &prefix)
 #endif
 }
 
-pType Parser::find_type(std::wstring const &name) const
+template<typename Ret, typename Fun>
+Ret find_in_node(Parser const &parser, Strings const &name, Fun const &function)
+{
+    assert(!parser.namespaces.empty());
+    dump_namespace_stack(parser, std::format("[S* {}]", as_utf8(name.back())));
+    auto ns { parser.namespaces.back() };
+    for (auto const &n : name | std::ranges::views::take(name.size() - 1)) {
+        auto mod { ns->find_module(n) };
+        if (mod == nullptr) {
+            return Ret {};
+        }
+        ns = mod->ns;
+        if (ns == nullptr) {
+            return Ret {};
+        }
+    }
+    return function(ns, name.back());
+}
+
+bool Parser::has_function(Strings const &name, pType const &type) const
+{
+    return find_in_node<bool>(
+        *this,
+        name,
+        [&type](NSNode const &ns, std::wstring const &n) -> bool {
+            return ns->find_function(n, type) != nullptr;
+        });
+}
+
+ASTNode Parser::find_function(Strings const &name, pType const &type) const
+{
+    return find_in_node<ASTNode>(
+        *this,
+        name,
+        [&type](NSNode const &ns, std::wstring const &n) -> ASTNode {
+            return ns->find_function(n, type);
+        });
+}
+
+// ASTNode Parser::find_function_by_arg_list(std::wstring const &name, pType const &type) const
+//{
+//     assert(is<TypeList>(type));
+//     assert(!namespaces.empty());
+//     return namespaces.back()->find_function_by_arg_list(name, type);
+// }
+
+pType Parser::type_of(Strings const &name) const
+{
+    return find_in_node<pType>(
+        *this,
+        name,
+        [](NSNode const &ns, std::wstring const &n) -> pType {
+            return ns->type_of(n);
+        });
+}
+
+ASTNodes Parser::find_overloads(Strings const &names, ASTNodes const &type_args) const
+{
+    return find_in_node<ASTNodes>(
+        *this,
+        names,
+        [&type_args](NSNode const &ns, std::wstring const &n) -> ASTNodes {
+            return ns->find_overloads(n, type_args);
+        });
+}
+
+void Parser::register_variable(std::wstring name, ASTNode node)
 {
     assert(!namespaces.empty());
-    dump_namespace_stack(*this, std::format("[S* {}]", as_utf8(name)));
-    return namespaces.back()->find_type(name);
+    namespaces.back()->register_variable(std::move(name), std::move(node));
+}
+
+bool Parser::has_variable(Strings const &name) const
+{
+    return find_in_node<bool>(
+        *this,
+        name,
+        [](NSNode const &ns, std::wstring const &n) -> bool {
+            return ns->has_variable(n);
+        });
+}
+
+void Parser::register_function(std::wstring name, ASTNode fnc)
+{
+    assert(!namespaces.empty());
+    namespaces.back()->register_function(std::move(name), std::move(fnc));
+}
+
+pType Parser::find_type(Strings const &name) const
+{
+    return find_in_node<pType>(
+        *this,
+        name,
+        [](NSNode const &ns, std::wstring const &n) -> pType {
+            return ns->find_type(n);
+        });
 }
 
 ASTNode Parser::current_function() const

@@ -8,4 +8,6 @@
 - Dynamic arrays
 - Arrays
 - Floats
+- Better (lol) function protection for functions in different modules
+- Mangling function names for overloads
 

@@ -9,6 +9,7 @@
 #include <string>
 #include <type_traits>
 
+#include <Util/StringUtil.h>
 #include <Util/Utf8.h>
 
 #include <App/Operator.h>
@@ -16,6 +17,8 @@
 #include <App/SyntaxNode.h>
 
 namespace Lia {
+
+using namespace std::literals;
 
 void print_indent(std::wostream &os, int indent)
 {
@@ -254,11 +257,16 @@ std::wstring to_string(ASTNode const &, Number const &impl)
 
 template<class N>
     requires std::is_same_v<N, Embed>
-    || std::is_same_v<N, Import>
     || std::is_same_v<N, Include>
 std::wstring to_string(ASTNode const &n, N const &impl)
 {
     return impl.file_name;
+}
+
+template<>
+std::wstring to_string(ASTNode const &n, Import const &impl)
+{
+    return join(impl.file_name, L"."sv);
 }
 
 template<>
@@ -398,17 +406,7 @@ std::wstring to_string(ASTNode const &n, TypeSpecification const &impl)
     return std::visit(
         overloads {
             [](TypeNameNode const &d) -> std::wstring {
-                auto ret { d.name };
-                if (!d.arguments.empty()) {
-                    wchar_t sep = '<';
-                    for (auto const &arg : d.arguments) {
-                        ret += sep;
-                        sep = ',';
-                        ret += to_string(arg);
-                    }
-                    ret += '>';
-                }
-                return ret;
+                return std::format(L"<{}>", join(d.name, std::wstring_view { L"," }));
             },
             [](ReferenceDescriptionNode const &d) -> std::wstring {
                 return std::format(L"&{}", to_string(d.referencing));
@@ -516,9 +514,7 @@ void dump(ASTNode const &node, std::wostream &os, int indent)
         if (node->ns->parent) {
             os << "<-" << node->ns->parent.id.value();
         }
-        os << ' ' << node->ns->types.size() << "/"
-           << node->ns->functions.size() << "/"
-           << node->ns->variables.size();
+        os << ' ' << node->ns->entries.size();
     }
     os << std::endl;
     std::visit(

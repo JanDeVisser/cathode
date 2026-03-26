@@ -52,6 +52,7 @@ using namespace Util;
     S(Import)              \
     S(LoopStatement)       \
     S(Module)              \
+    S(ModuleProxy)         \
     S(Nullptr)             \
     S(Number)              \
     S(Parameter)           \
@@ -96,6 +97,7 @@ extern char const *SyntaxNodeType_name(SyntaxNodeType type);
 extern void        print_indent(std::wostream &os, int indent);
 
 using Label = std::optional<std::wstring>;
+using Strings = std::vector<std::wstring>;
 
 struct Parser;
 
@@ -111,6 +113,7 @@ struct ASTNode : public Ptr<struct ASTNodeImpl, Parser> {
     }
 
     ASTNode() = default;
+    ASTNode(ASTNode const &) = default;
 
     ASTNode(std::nullptr_t const &n)
         : Ptr(n)
@@ -158,30 +161,41 @@ struct Namespace {
     using FunctionIter = FunctionMap::iterator;
     using FunctionConstIter = FunctionMap::const_iterator;
 
-    NSNode      id;
-    ASTNode     node;
-    TypeMap     types {};
-    FunctionMap functions {};
-    VariableMap variables {};
-    NSNode      parent { nullptr };
+    constexpr static size_t Variable = 0;
+    constexpr static size_t Function = 1;
+    constexpr static size_t Module = 2;
+    constexpr static size_t Type = 3;
+
+    using NSEntry = std::variant<ASTNode, ASTNode, ASTNode, pType>;
+    using NSEntryMap = std::multimap<std::wstring, NSEntry>;
+    using NSEntries = std::vector<NSEntry>;
+
+    NSNode     id;
+    ASTNode    node;
+    NSEntryMap entries;
+    NSNode     parent { nullptr };
 
     explicit Namespace(ASTNode node, NSNode parent = nullptr);
-    bool     is_registered(std::wstring const &name) const;
-    pType    find_type(std::wstring const &name) const;
-    ASTNode  current_function() const;
-    bool     has_type(std::wstring const &name) const;
-    void     register_type(std::wstring name, pType type);
-    void     register_function(std::wstring name, ASTNode fnc);
-    bool     has_function(std::wstring const &name) const;
-    void     unregister_function(std::wstring name, ASTNode const &fnc);
-    ASTNode  find_function(std::wstring const &name, pType const &type) const;
-    ASTNode  find_function_by_arg_list(std::wstring const &name, pType const &type) const;
-    ASTNode  find_function_here(std::wstring name, pType const &type) const;
-    ASTNodes find_overloads(std::wstring const &name, ASTNodes const &type_args) const;
-    bool     has_variable(std::wstring const &name) const;
-    ASTNode  find_variable(std::wstring const &name) const;
-    pType    type_of(std::wstring const &name) const;
-    void     register_variable(std::wstring name, ASTNode node);
+    bool                   contains(std::wstring const &name) const;
+    int                    count(std::wstring const &name) const;
+    std::optional<NSEntry> at(std::wstring const &name) const;
+    NSEntries              all(std::wstring const &name) const;
+    pType                  type_of(std::wstring const &) const;
+    ASTNode                find_module(std::wstring const &name) const;
+    bool                   has_module(std::wstring const &name) const;
+    void                   register_module(std::wstring const &name, ASTNode mod);
+    pType                  find_type(std::wstring const &name) const;
+    bool                   has_type(std::wstring const &name) const;
+    void                   register_type(std::wstring name, pType type);
+    void                   register_function(std::wstring name, ASTNode fnc);
+    ASTNode                current_function() const;
+    bool                   has_function(std::wstring const &name) const;
+    ASTNodes               find_functions(std::wstring const &name) const;
+    ASTNode                find_function(std::wstring const &name, pType const &type) const;
+    ASTNodes               find_overloads(std::wstring const &name, ASTNodes const &type_args) const;
+    bool                   has_variable(std::wstring const &name) const;
+    ASTNode                find_variable(std::wstring const &name) const;
+    void                   register_variable(std::wstring name, ASTNode node);
 };
 
 struct BinaryExpression {
@@ -330,9 +344,9 @@ struct IfStatement {
 };
 
 struct Import {
-    std::wstring file_name;
+    Strings file_name;
 
-    explicit Import(std::wstring file_name);
+    explicit Import(Strings file_name);
 };
 
 struct Include {
@@ -355,6 +369,13 @@ struct Module {
 
     Module(std::wstring name, std::wstring source);
     Module(std::wstring name, std::wstring source, ASTNodes const &statements);
+};
+
+struct ModuleProxy {
+    std::wstring name;
+    ASTNode      module;
+
+    ModuleProxy(std::wstring name, ASTNode module = nullptr);
 };
 
 struct Nullptr {
@@ -493,8 +514,8 @@ struct TagValue {
 };
 
 struct TypeNameNode {
-    std::wstring name;
-    ASTNodes     arguments {};
+    Strings  name;
+    ASTNodes arguments {};
 };
 
 struct ReferenceDescriptionNode {
@@ -648,6 +669,7 @@ using SyntaxNode = std::variant<Dummy,
     Import,
     LoopStatement,
     Module,
+    ModuleProxy,
     Nullptr,
     Number,
     Parameter,

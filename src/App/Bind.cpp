@@ -883,7 +883,7 @@ BindResult bind(ASTNode n, FunctionDefinition &impl)
     }
     for (auto const &param : decl.parameters) {
         auto parameter = get<Parameter>(param);
-        if (!parser.has_variable(parameter.name)) {
+        if (!parser.has_variable({ parameter.name })) {
             parser.register_variable(parameter.name, param);
         }
     }
@@ -897,7 +897,7 @@ template<class N>
     requires std::is_same_v<N, Identifier> || std::is_same_v<N, StampedIdentifier>
 BindResult bind(ASTNode n, N &impl)
 {
-    auto const &type = n.repo->type_of(impl.identifier);
+    auto const &type = n.repo->type_of({ impl.identifier });
     if (type == nullptr) {
         if (n.repo->pass == 0) {
             return BindError { ASTStatus::Undetermined };
@@ -938,6 +938,12 @@ template<>
 BindResult bind(ASTNode n, Module &impl)
 {
     try_bind_nodes(impl.statements);
+    return TypeRegistry::void_;
+}
+
+template<>
+BindResult bind(ASTNode n, ModuleProxy &impl)
+{
     return TypeRegistry::void_;
 }
 
@@ -1132,7 +1138,7 @@ BindResult bind(ASTNode n, VariableDeclaration &impl)
             L"Type mismatch between declared type `{}` of `{}` and type of initializer value `{}`",
             my_type->name, impl.name, init_type->name);
     }
-    if (n.repo->has_variable(impl.name)) {
+    if (n.repo->has_variable({ impl.name })) {
         return n.bind_error(L"Duplicate variable name `{}`", impl.name);
     }
     parser.register_variable(impl.name, n);

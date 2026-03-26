@@ -1092,6 +1092,12 @@ GenResult generate_qbe_node(ASTNode const &n, Module const &impl, QBEContext &ct
 }
 
 template<>
+GenResult generate_qbe_node(ASTNode const &n, ModuleProxy const &impl, QBEContext &ctx)
+{
+    return QBEOperand { n, ILValue::null() };
+}
+
+template<>
 GenResult generate_qbe_node(ASTNode const &n, Parameter const &impl, QBEContext &ctx)
 {
     auto const &param_binding = ctx.add_parameter(impl.name, n->bound_type);

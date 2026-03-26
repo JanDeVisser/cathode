@@ -51,17 +51,11 @@ public:
     {
     }
 
+    Ptr &operator=(Ptr const &other) = default;
     Ptr &operator=(std::nullptr_t const &)
     {
         repo = nullptr;
         id.reset();
-        return *this;
-    }
-
-    Ptr &operator=(Ptr const &other)
-    {
-        repo = other.repo;
-        id = other.id;
         return *this;
     }
 

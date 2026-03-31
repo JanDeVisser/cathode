@@ -239,13 +239,8 @@ GenResult QBEOperand::materialize(QBEContext &ctx) const
     auto ret_op { *this };
     if (is<TypeList>(ptype)) {
         assert(value.has_value());
-        ret_op.set_value(ILValue::pointer(++ctx.next_var));
-        ctx.add_operation(
-            AllocDef {
-                (ptype->align_of() < 8) ? 4ul : 8ul,
-                static_cast<size_t>(ptype->size_of()),
-                ret_op.get_value(),
-            });
+        auto temp { ctx.add_temporary(ptype) };
+        ret_op.set_value(ILValue::temporary(temp.index, ptype));
         assert(std::holds_alternative<ILValues>(get_value().inner));
         auto const &values = std::get<ILValues>(get_value().inner);
         auto const &types = get<TypeList>(ptype);
@@ -505,14 +500,8 @@ GenResult variable_decl(ASTNode const &n, std::wstring const &name, pType const 
 {
     size_t      size = type->size_of();
     auto const &binding = ctx.add(name, type);
-    auto        var_ref = ILValue::variable(binding.depth, binding.index, ILBaseType::L);
-    ctx.add_operation(
-        AllocDef {
-            (size < 8) ? 4u : 8u,
-            size,
-            var_ref,
-        });
-    QBEOperand operand { n, var_ref };
+    auto        var_ref = ILValue::variable(binding.index, ILBaseType::L);
+    QBEOperand  operand { n, var_ref };
     if (init != nullptr) {
         return assign(operand, init, ctx);
     }
@@ -637,17 +626,7 @@ GenResult generate_qbe_node(ASTNode const &n, Block const &impl, QBEContext &ctx
     }
     auto &file = ctx.program.files[ctx.current_file];
     if (ctx.current_function >= file.functions.size()) {
-        auto &file { ctx.program.files[ctx.current_file] };
-        auto &function = file.functions.emplace_back(
-            ctx.current_file,
-            file.name,
-            n->bound_type,
-            false);
-        function.id = file.functions.size() - 1;
-        ctx.is_export = false;
-        ctx.current_function = function.id;
-        ctx.next_var = 0;
-        ctx.next_label = 0;
+        ctx.add_function(file.name, n->bound_type);
     }
     ctx.add_operation(
         LabelDef {
@@ -655,13 +634,11 @@ GenResult generate_qbe_node(ASTNode const &n, Block const &impl, QBEContext &ctx
         });
 
     auto &function = file.functions[ctx.current_function];
-    function.push();
     for (auto const &s : impl.statements) {
         if (auto res = generate_qbe_node(s, ctx); !res) {
             return res;
         }
     }
-    function.pop();
     return {};
 }
 
@@ -705,12 +682,8 @@ GenResult generate_qbe_node(ASTNode const &n, Call const &impl, QBEContext &ctx)
     }
 
     if (alloc_sz > 0) {
-        ret_alloc = ILValue::local(++ctx.next_var, ILBaseType::L);
-        ctx.add_operation(AllocDef {
-            (alloc_sz < 8) ? 4u : 8u,
-            alloc_sz,
-            ret_alloc,
-        });
+        auto temp { ctx.add_temporary(n->bound_type) };
+        ret_alloc = ILValue::temporary(temp.index, temp.type);
     }
 
     for (auto const &[arg, param] : std::ranges::views::zip(get<ExpressionList>(impl.arguments).expressions, decl.parameters)) {
@@ -723,13 +696,8 @@ GenResult generate_qbe_node(ASTNode const &n, Call const &impl, QBEContext &ctx)
             args.emplace_back(value);
         } else if (is<ReferenceType>(arg->bound_type) && !qbe_first_class_type(param->bound_type)) {
             trace("param not reference, arg is reference");
-            auto arg_alloc { ILValue::local(++ctx.next_var, qbe_type(param->bound_type)) };
-            ctx.add_operation(
-                AllocDef {
-                    (param->bound_type->size_of() < 8) ? 4u : 8u,
-                    static_cast<size_t>(param->bound_type->size_of()),
-                    arg_alloc,
-                });
+            auto temp { ctx.add_temporary(param->bound_type) };
+            auto arg_alloc { ILValue::temporary(temp.index, param->bound_type) };
             auto ptr { ILValue::local(++ctx.next_var, ILBaseType::L) };
             ctx.add_operation(
                 LoadDef {
@@ -847,15 +815,10 @@ GenResult generate_qbe_node(ASTNode const &n, CString const &impl, QBEContext &c
 template<>
 GenResult generate_qbe_node(ASTNode const &n, String const &impl, QBEContext &ctx)
 {
-    int  var = ++ctx.next_var;
-    auto len_id = ++ctx.next_var;
-    auto ret = ILValue::local(var, ctx.qbe_type(TypeRegistry::string));
-    ctx.add_operation(
-        AllocDef {
-            16,
-            16,
-            ret,
-        });
+    int  var { ++ctx.next_var };
+    auto len_id { ++ctx.next_var };
+    auto temp { ctx.add_temporary(TypeRegistry::string) };
+    auto ret { ILValue::temporary(temp.index, TypeRegistry::string) };
     ctx.add_operation(
         StoreDef {
             ctx.add_string(impl.string),
@@ -997,31 +960,9 @@ template<>
 GenResult generate_qbe_node(ASTNode const &n, FunctionDeclaration const &impl, QBEContext &ctx)
 {
     trace(L"Generating function `{}` -> {}", impl.name, get<TypeType>(impl.return_type->bound_type).type->to_string());
-    auto &file { ctx.program.files[ctx.current_file] };
-    auto &function = file.functions.emplace_back(
-        ctx.current_file,
+    ctx.add_function(
         impl.name,
-        get<TypeType>(impl.return_type->bound_type).type,
-        ctx.is_export);
-    if (auto sz = function.return_type->size_of(); sz > 8) {
-        function.ret_allocation = sz;
-    }
-    function.id = file.functions.size() - 1;
-    ctx.is_export = false;
-    ctx.current_function = function.id;
-    file.has_exports |= function.exported;
-    file.has_main = impl.name == L"main";
-    function.push();
-    ctx.next_var = 0;
-    ctx.next_label = 0;
-    if (function.ret_allocation > 0) {
-        ctx.add_operation(
-            AllocDef {
-                8,
-                static_cast<size_t>(function.ret_allocation),
-                ILValue::return_value(ILBaseType::L),
-            });
-    }
+        get<TypeType>(impl.return_type->bound_type).type);
     auto _ = generate_qbe_nodes(impl.parameters, ctx);
     return QBEOperand { n, ILValue::null() };
 }
@@ -1033,11 +974,7 @@ GenResult generate_qbe_node(ASTNode const &n, Identifier const &impl, QBEContext
     assert(n->bound_type.repo != nullptr);
     auto t = ctx.qbe_type(n->bound_type);
     if (auto binding = ctx.find(impl.identifier); binding) {
-        auto b = *binding;
-        if (b.depth == 0) {
-            return QBEOperand { n, ILValue::parameter(b.index, t) };
-        }
-        return QBEOperand { n, ILValue::variable(b.depth, b.index, t) };
+        return QBEOperand { n, ILValue::variable(binding->index, t) };
     }
     fatal(L"Could not find variable `{}`", impl.identifier);
 }
@@ -1108,48 +1045,25 @@ GenResult generate_qbe_node(ASTNode const &n, Parameter const &impl, QBEContext 
     size_t      sz = n->bound_type->size_of();
     auto        align = n->bound_type->align_of();
     auto        param = ILValue::parameter(param_binding.index, ctx.qbe_type(n->bound_type));
-    auto        var = ILValue::variable(binding.depth, binding.index, param.type);
+    auto        var = ILValue::variable(binding.index, param.type);
 
-    ctx.add_operation(
-        AllocDef {
-            (align <= 4) ? 4ul : 8ul,
-            sz,
-            var,
-        });
     std::visit(
         overloads {
             [&ctx, &param, &var](BoolType const &) {
-                ctx.add_operation(
-                    StoreDef {
-                        param,
-                        var,
-                    });
+                ctx.add_operation(StoreDef { param, var });
             },
             [&ctx, &param, &var](IntType const &int_type) {
-                ctx.add_operation(
-                    StoreDef {
-                        param,
-                        var,
-                    });
+                ctx.add_operation(StoreDef { param, var });
             },
             [&ctx, &param, &var](FloatType const &flt_type) {
-                ctx.add_operation(
-                    StoreDef {
-                        param,
-                        var,
-                    });
+                ctx.add_operation(StoreDef { param, var });
             },
             [](std::monostate const &) {
                 UNREACHABLE();
             },
-            [&ctx, &param_binding, &binding, &align](auto const &descr) {
+            [&ctx, &param, &var, &align](auto const &descr) {
                 intptr_t sz = static_cast<intptr_t>(descr.size_of());
-                ctx.add_operation(
-                    BlitDef {
-                        ILValue::parameter(param_binding.index, ILBaseType::L),
-                        ILValue::variable(binding.depth, binding.index, ILBaseType::L),
-                        sz,
-                    });
+                ctx.add_operation(BlitDef { param, var, sz });
             },
         },
         n->bound_type->description);
@@ -1185,7 +1099,7 @@ GenResult generate_qbe_node(ASTNode const &n, Return const &impl, QBEContext &ct
     if (impl.expression != nullptr) {
         auto &file = ctx.program.files[ctx.current_file];
         auto &function = file.functions[ctx.current_function];
-        if (function.ret_allocation > 0) {
+        if (function.return_type->size_of() > 8) {
             if (auto res = assign(QBEOperand { n, ILValue::return_value(ILBaseType::L) }, impl.expression, ctx); !res.has_value()) {
                 return res;
             };
@@ -1281,6 +1195,17 @@ GenResult generate_qbe_node(ASTNode const &n, WhileStatement const &impl, QBECon
 GenResult generate_qbe_node(ASTNode const &n, QBEContext &ctx)
 {
     trace("Generating {}", SyntaxNodeType_name(n->type()));
+    if (ctx.current_file < ctx.program.files.size()) {
+        auto &file { ctx.program.files[ctx.current_file] };
+        if (ctx.current_function < file.functions.size() && !is<Dummy>(n)) {
+            ctx.add_operation(
+                DbgLoc {
+                    n->location.line,
+                    n->location.column,
+                    as_wstring(SyntaxNodeType_name(n->type())),
+                });
+        }
+    }
     return std::visit(
         [&n, &ctx](auto const &impl) -> GenResult {
             return generate_qbe_node(n, impl, ctx);

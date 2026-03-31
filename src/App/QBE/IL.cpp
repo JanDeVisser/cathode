@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include "App/Type.h"
 #include <ranges>
 #include <sstream>
 
@@ -262,6 +263,10 @@ void flatten_type(VoidType const &, ILLayout &)
 {
 }
 
+void flatten_type(ZeroTerminatedArray const &, ILLayout &)
+{
+}
+
 void flatten_type(auto const &descr, std::vector<ILBaseType> &)
 {
     NYI("flatten_type for {}", typeid(descr).name());
@@ -513,13 +518,16 @@ std::wostream &operator<<(std::wostream &os, ILValue const &value)
                 os << "%local_" << local.var;
             },
             [&os](ILValue::Global const &global) {
-                os << '$' << global.name;
+                os << "$" << global.name;
             },
-            [&os](ILValue::Literal const &literal) {
-                os << literal.literal;
+            [&os](std::wstring const &literal) {
+                os << literal;
+            },
+            [&os](ILValue::Temporary const &temporary) {
+                os << "%temp_" << temporary.index;
             },
             [&os](ILValue::Variable const &var) {
-                os << "%var_" << var.depth << '.' << var.index;
+                os << "%var_" << var.index;
             },
             [&os](ILValue::Parameter const &param) {
                 os << "%param_" << param.index;
@@ -630,6 +638,21 @@ std::wostream &operator<<(std::wostream &os, CastDef const &impl)
 std::wostream &operator<<(std::wostream &os, CopyDef const &impl)
 {
     os << "    " << impl.target << " = " << targettype(impl.target.type) << " copy " << impl.expr;
+    return os;
+}
+
+std::wostream &operator<<(std::wostream &os, DbgFile const &impl)
+{
+    os << "dbgfile \"" << impl.name << '"';
+    return os;
+}
+
+std::wostream &operator<<(std::wostream &os, DbgLoc const &impl)
+{
+    os << "    dbgloc " << impl.line << ", " << impl.column;
+    if (!impl.comment.empty()) {
+        os << " # " << impl.comment;
+    }
     return os;
 }
 
@@ -783,6 +806,28 @@ std::wostream &operator<<(std::wostream &os, ILFunction const &function)
     os << R"() {
 @start
 )";
+    if (function.return_type->size_of() > 8) {
+        os << AllocDef {
+            8,
+            static_cast<size_t>(function.return_type->size_of()),
+            ILValue::return_value(ILBaseType::L),
+        } << '\n';
+    }
+    info(L"<< ILFunction {} variables {}", function.name, function.variables.size());
+    for (auto const &binding : function.variables) {
+        os << AllocDef {
+            (binding.type->size_of() < 8) ? 4ul : 8ul,
+            static_cast<size_t>(binding.type->size_of()),
+            ILValue::variable(binding.index, binding.type),
+        } << '\n';
+    }
+    for (auto const &temp : function.temps) {
+        os << AllocDef {
+            (temp.type->size_of() < 8) ? 4ul : 8ul,
+            static_cast<size_t>(temp.type->size_of()),
+            ILValue::temporary(temp.index, temp.type),
+        } << '\n';
+    }
     for (auto const &instruction : function.instructions) {
         os << instruction;
     }
@@ -891,18 +936,19 @@ std::wostream &operator<<(std::wostream &os, ILFile const &file)
     if (!file.types.empty()) {
         os << '\n';
     }
+    os << DbgFile { file.name } << '\n';
     for (auto const &function : file.functions) {
         os << function;
     }
     for (auto const &[ix, s] : std::ranges::views::enumerate(file.strings)) {
-        os << "data $str_" << ix + 1 << " = { ";
+        os << "data $str_" << ix << " = { ";
         for (auto ch : s) {
             os << std::format(L"w {:d}, ", ch);
         }
         os << "w 0 }\n";
     }
     for (auto const &[ix, s] : std::ranges::views::enumerate(file.cstrings)) {
-        os << "data $cstr_" << ix + 1 << " = { ";
+        os << "data $cstr_" << ix << " = { ";
         for (auto ch : s) {
             os << std::format(L"b {:d}, ", ch);
         }
@@ -940,13 +986,20 @@ std::wostream &operator<<(std::wostream &os, ILFile const &file)
     return os;
 }
 
+ILFunction::ILFunction(ILFile &file, std::wstring name, pType return_type, bool exported)
+    : file_id(file.id)
+    , name(std::move(name))
+    , return_type(return_type)
+    , exported(exported)
+    , id(file.functions.size())
+{
+}
+
 std::optional<ILBinding> ILFunction::find(std::wstring_view name)
 {
-    for (auto const &scope : variables) {
-        for (auto const &binding : scope) {
-            if (binding.name == name) {
-                return binding;
-            }
+    for (auto const &binding : variables) {
+        if (binding.name == name) {
+            return binding;
         }
     }
     for (auto const &binding : parameters) {
@@ -959,23 +1012,20 @@ std::optional<ILBinding> ILFunction::find(std::wstring_view name)
 
 ILBinding const &ILFunction::add(std::wstring_view name, pType const &type)
 {
-    assert(!variables.empty());
-    return variables.back().emplace_back(std::wstring { name }, type, variables.size(), variables.back().size(), qbe_type(type));
+    info(L"Adding {} size {}", name, variables.size());
+    auto &ret { variables.emplace_back(std::wstring { name }, type, variables.size(), qbe_type(type)) };
+    info(L"After adding {} size {}", name, variables.size());
+    return ret;
 }
 
 ILBinding const &ILFunction::add_parameter(std::wstring_view name, pType const &type)
 {
-    return parameters.emplace_back(std::wstring { name }, type, 0, parameters.size(), qbe_type(type));
+    return parameters.emplace_back(std::wstring { name }, type, parameters.size(), qbe_type(type));
 }
 
-void ILFunction::push()
+ILTemporary const &ILFunction::add_temporary(pType const &type, ILType il_type)
 {
-    variables.emplace_back();
+    return temps.emplace_back(temps.size(), type, std::move(il_type));
 }
 
-void ILFunction::pop()
-{
-    assert(!variables.empty());
-    variables.pop_back();
-}
 }

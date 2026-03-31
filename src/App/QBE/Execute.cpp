@@ -152,14 +152,22 @@ void assign(pFrame const &frame, ILValue const &val_ref, QBEValue const &v)
                 }
                 frame->locals[local.var] = v;
             },
+            [frame, &v](ILValue::Temporary const &temp) {
+                trace(L"Set temp {} = {}", temp.index, v);
+                if (frame->temporaries.size() < temp.index + 1) {
+                    frame->temporaries.resize(temp.index + 1);
+                }
+                frame->temporaries[temp.index] = v;
+            },
             [frame, &v](ILValue::Variable const &variable) {
-                frame->variables[variable.name()] = v;
+                frame->variables.resize(variable.index + 1);
+                frame->variables[variable.index] = v;
             },
             [frame, &v](ILValue::ReturnValue const &ret_val) {
                 frame->return_value = v;
             },
             [frame, &v](ILValue::Parameter const &parameter) {
-                frame->variables[parameter.name()] = v;
+                frame->variables[parameter.index] = v;
             },
             [](auto const &inner) {
                 fatal("Execute::assign({})", typeid(decltype(inner)).name());
@@ -178,21 +186,28 @@ QBEValue get(pFrame const &frame, ILValue const &val_ref)
                 trace(L"Get local {} = {:x}", local.var, frame->locals[local.var]);
                 return frame->locals[local.var];
             },
+            [&frame](ILValue::Temporary const &temp) -> QBEValue {
+                if (frame->temporaries.size() < temp.index + 1) {
+                    fatal("No temporary value with id `{}`in frame", temp.index);
+                }
+                trace(L"Get temp {} = {:x}", temp.index, frame->temporaries[temp.index]);
+                return frame->temporaries[temp.index];
+            },
             [&frame](ILValue::Variable const &variable) -> QBEValue {
-                if (frame->variables.contains(variable.name())) {
-                    auto v = frame->variables[variable.name()];
-                    trace(L"Get variable {} = {:x}", frame->variables[variable.name()], v);
+                if (variable.index < frame->variables.size()) {
+                    auto v = frame->variables[variable.index];
+                    trace(L"Get variable {} = {:x}", variable.index, v);
                     return v;
                 }
-                fatal(L"No variable with name `{}` in frame", variable.name());
+                fatal(L"No variable with index `{}` in frame {}", variable.index, frame->variables.size());
                 return {};
             },
             [&frame](ILValue::Parameter const &param) -> QBEValue {
-                if (frame->arguments.contains(param.name())) {
-                    auto v = frame->arguments[param.name()];
+                if (param.index < frame->arguments.size()) {
+                    auto v = frame->arguments[param.index];
                     return v;
                 }
-                fatal(L"No parameter with name `{}` in frame", param.name());
+                fatal(L"No parameter with index `{}` in frame", param.index);
                 return {};
             },
             [&frame](ILValue::Global const &global) -> QBEValue {
@@ -379,11 +394,17 @@ void VM::dump_stack() const
 void Frame::dump_frame() const
 {
     trace("  Variables:");
-    for (auto const &[name, val] : variables) {
-        trace(L"    {}: {:tx}", name, val);
+    for (auto const &[ix, val] : variables | std::ranges::views::enumerate) {
+        trace(L"    {}: {:tx}", ix, val);
     }
     trace("  Locals:");
-    for (auto const &[ix, l] : std::ranges::views::enumerate(locals)) {
+    for (auto const &[ix, l] : locals | std::ranges::views::enumerate) {
+        if (ix > 0) {
+            trace(L"    {}: {:tx}", ix, l);
+        }
+    }
+    trace("  Temporaries:");
+    for (auto const &[ix, l] : temporaries | std::ranges::views::enumerate) {
         if (ix > 0) {
             trace(L"    {}: {:tx}", ix, l);
         }
@@ -509,6 +530,20 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, CopyDef const &ins
     assign(frame, instruction.target, get(frame, instruction.expr));
     ++frame->ip;
     return instruction.target;
+}
+
+template<>
+ExecResult execute(ILFunction const &il, pFrame const &frame, DbgFile const &instruction)
+{
+    ++frame->ip;
+    return {};
+}
+
+template<>
+ExecResult execute(ILFunction const &il, pFrame const &frame, DbgLoc const &instruction)
+{
+    ++frame->ip;
+    return {};
 }
 
 template<>
@@ -647,18 +682,19 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, ILInstruction cons
 ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &function, std::vector<QBEValue> const &args)
 {
     auto frame { vm.new_frame(file, function) };
+    frame->arguments.resize(function.parameters.size());
     for (auto const &[ix, arg] : std::ranges::views::enumerate(args)) {
         std::wstring name;
         name = function.parameters[ix].name;
-        frame->arguments[std::format(L"param_{}", ix)] = arg;
+        frame->arguments[ix] = arg;
     }
     trace("  Global Base  = 0x{:016x}", reinterpret_cast<intptr_t>(vm.data.data()));
     for (auto const &[ix, s] : std::ranges::views::enumerate(file.strings)) {
-        auto n = std::format(L"str_{}", ix + 1);
+        auto n { std::format(L"str_{}", ix) };
         if (!vm.globals[file.id].contains(n)) {
             assert((vm.data_pointer + (s.length() + 1) * sizeof(wchar_t)) <= VM::STACK_SIZE);
             QBEValue val { vm.data.data() + vm.data_pointer };
-            trace(L"Set global {}.{} = offset 0x{:04x} ptr 0x{:016x}", file.id, n, vm.data_pointer, reinterpret_cast<intptr_t>(vm.data.data() + vm.data_pointer));
+            trace(L"Set global {} = offset 0x{:04x} ptr 0x{:016x}", file.id, ix, vm.data_pointer, reinterpret_cast<intptr_t>(vm.data.data() + vm.data_pointer));
             for (auto ch : s) {
                 *((wchar_t *) (vm.data.data() + vm.data_pointer)) = ch;
                 vm.data_pointer += sizeof(wchar_t);
@@ -669,7 +705,7 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
         }
     }
     for (auto const &[ix, s] : std::ranges::views::enumerate(file.cstrings)) {
-        auto n = std::format(L"cstr_{}", ix + 1);
+        auto n { std::format(L"cstr_{}", ix) };
         if (!vm.globals[file.id].contains(n)) {
             assert((vm.data_pointer + s.length() + 1) <= VM::STACK_SIZE);
             QBEValue val { vm.data.data() + vm.data_pointer };
@@ -680,7 +716,7 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
             *((wchar_t *) (vm.data.data() + vm.data_pointer)) = 0;
             vm.data_pointer += sizeof(wchar_t);
             vm.globals[file.id][n] = val;
-            trace(L"Set global {}.{} = {}", file.id, n, val);
+            trace(L"Set global {} = {}", file.id, ix, val);
         }
     }
     std::ranges::for_each(
@@ -711,7 +747,41 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
                     vm.data_pointer += sizeof(wchar_t);
                 });
             vm.globals[file.id][n] = val;
-            trace(L"Set global {}.{} = {}", file.id, n, val);
+            trace(L"Set global {} = {}", file.id, ix, val);
+        });
+    if (function.return_type->size_of() > 8) {
+        assert(execute(
+            function,
+            frame,
+            AllocDef {
+                8,
+                static_cast<size_t>(function.return_type->size_of()),
+                ILValue::return_value(ILBaseType::L),
+            }));
+    }
+    std::ranges::for_each(
+        function.temps,
+        [&function, &frame](auto const &temp) {
+            assert(execute(
+                function,
+                frame,
+                AllocDef {
+                    (temp.type->size_of() < 8) ? 4ul : 8ul,
+                    static_cast<size_t>(temp.type->size_of()),
+                    ILValue::temporary(temp.index, temp.type),
+                }));
+        });
+    std::ranges::for_each(
+        function.variables,
+        [&function, &frame](auto const &variable) {
+            assert(execute(
+                function,
+                frame,
+                AllocDef {
+                    (variable.type->size_of() < 8) ? 4ul : 8ul,
+                    static_cast<size_t>(variable.type->size_of()),
+                    ILValue::variable(variable.index, variable.type),
+                }));
         });
     QBEValue base_pointer { vm.stack.data() + vm.stack_pointer };
     while (true) {

@@ -239,22 +239,11 @@ struct ILValue {
     };
 
     struct Variable {
-        int depth;
         int index;
-
-        std::wstring name() const
-        {
-            return std::format(L"var_{}.{}", depth, index);
-        }
     };
 
     struct Parameter {
         int index;
-
-        std::wstring name() const
-        {
-            return std::format(L"param_{}", index);
-        }
     };
 
     struct ReturnValue {
@@ -264,19 +253,20 @@ struct ILValue {
         std::wstring name;
     };
 
-    struct Literal {
-        std::wstring literal;
+    struct Temporary {
+        int index;
     };
 
     using ILValueInner = std::variant<
         Local,
         Global,
-        Literal,
+        Temporary,
         Variable,
         Parameter,
         ReturnValue,
         int64_t,
         double,
+        std::wstring,
         std::vector<ILValue>>;
 
     ILValue()
@@ -324,13 +314,19 @@ struct ILValue {
     template<typename TypeDesc>
     static ILValue literal(std::wstring literal, TypeDesc td)
     {
-        return { ILType { std::move(td) }, Literal { std::move(literal) } };
+        return { ILType { std::move(td) }, literal };
     }
 
     template<typename TypeDesc>
-    static ILValue variable(int depth, int index, TypeDesc td)
+    static ILValue temporary(int index, TypeDesc td)
     {
-        return { ILType { std::move(td) }, Variable { depth, index } };
+        return { ILType { std::move(td) }, Temporary { index } };
+    }
+
+    template<typename TypeDesc>
+    static ILValue variable(int index, TypeDesc td)
+    {
+        return { ILType { std::move(td) }, Variable { index } };
     }
 
     template<typename TypeDesc>
@@ -427,6 +423,20 @@ struct CopyDef {
     ILValue target;
 
     friend std::wostream &operator<<(std::wostream &os, CopyDef const &impl);
+};
+
+struct DbgFile {
+    std::wstring name;
+
+    friend std::wostream &operator<<(std::wostream &os, DbgFile const &impl);
+};
+
+struct DbgLoc {
+    size_t       line;
+    size_t       column;
+    std::wstring comment;
+
+    friend std::wostream &operator<<(std::wostream &os, DbgLoc const &impl);
 };
 
 struct ExprDef {
@@ -531,6 +541,8 @@ using ILInstructionImpl = std::variant<
     CallDef,
     CastDef,
     CopyDef,
+    DbgFile,
+    DbgLoc,
     ExprDef,
     ExtDef,
     HltDef,
@@ -566,13 +578,17 @@ concept ir_node = std::is_same_v<N, ILFile>
 struct ILBinding {
     std::wstring name;
     pType        type;
-    int          depth;
     int          index;
     ILType       il_type;
 };
 
+struct ILTemporary {
+    int    index;
+    pType  type;
+    ILType il_type;
+};
+
 using ILBindings = std::vector<ILBinding>;
-using ILBindingStack = std::vector<ILBindings>;
 
 struct ILFunction {
     size_t                     file_id;
@@ -582,15 +598,16 @@ struct ILFunction {
     intptr_t                   ret_allocation { 0 };
     size_t                     id;
     ILBindings                 parameters {};
-    ILBindingStack             variables {};
-    std::vector<ILInstruction> instructions;
-    std::vector<size_t>        labels;
+    ILBindings                 variables {};
+    std::vector<ILTemporary>   temps {};
+    std::vector<ILInstruction> instructions {};
+    std::vector<size_t>        labels {};
 
+    ILFunction(ILFile &file, std::wstring name, pType return_type, bool exported);
     std::optional<ILBinding> find(std::wstring_view name);
     ILBinding const         &add(std::wstring_view name, pType const &type);
     ILBinding const         &add_parameter(std::wstring_view name, pType const &type);
-    void                     push();
-    void                     pop();
+    ILTemporary const       &add_temporary(pType const &type, ILType il_type);
     friend std::wostream    &operator<<(std::wostream &os, ILFunction const &function);
 };
 
@@ -720,17 +737,20 @@ struct QBEValue {
 QBEValue evaluate(QBEValue const &lhs, Operator op, QBEValue const &rhs);
 QBEValue evaluate(Operator op, QBEValue const &operand);
 
-using ILVariables = std::map<std::wstring, QBEValue>;
+using ILVariables = std::vector<QBEValue>;
+using ILNamedVariables = std ::map<std::wstring, QBEValue>;
 
 struct QBEContext {
     int       next_label;
     int       next_var;
+    int       next_literal;
     fs::path  file_name;
     bool      is_export { false };
     ILProgram program {};
     size_t    current_file;
     size_t    current_function;
 
+    ILFunction              &add_function(std::wstring name, pType return_type);
     ILValue                  add_string(std::wstring_view s);
     ILValue                  add_cstring(std::string_view s);
     ILValue                  add_enumeration(pType const &enum_type);
@@ -739,20 +759,22 @@ struct QBEContext {
     std::optional<ILBinding> find(std::wstring_view name);
     ILBinding const         &add(std::wstring_view name, pType const &type);
     ILBinding const         &add_parameter(std::wstring_view name, pType const &type);
+    ILTemporary const       &add_temporary(pType const &type);
     void                     push();
     void                     pop();
     ILFunction              &function();
 };
 
 struct Frame {
-    struct VM            &vm;
-    ILFile const         &file;
-    ILFunction const     &function;
-    ILVariables           variables {};
-    ILVariables           arguments {};
-    QBEValue              return_value;
-    std::vector<QBEValue> locals {};
-    size_t                ip { 0 };
+    struct VM        &vm;
+    ILFile const     &file;
+    ILFunction const &function;
+    ILVariables       variables {};
+    ILVariables       arguments {};
+    QBEValue          return_value;
+    ILVariables       locals {};
+    ILVariables       temporaries {};
+    size_t            ip { 0 };
 
     QBEValue allocate(size_t bytes, size_t alignment);
     QBEValue allocate(ILType const &type);
@@ -767,7 +789,7 @@ struct VM {
     constexpr static size_t         STACK_SIZE = 64 * 1024;
     ILProgram const                &program;
     std::vector<Frame>              frames;
-    std::vector<ILVariables>        globals;
+    std::vector<ILNamedVariables>   globals {};
     std::array<uint8_t, STACK_SIZE> stack;
     std::array<uint8_t, STACK_SIZE> data;
     size_t                          stack_pointer { 0 };

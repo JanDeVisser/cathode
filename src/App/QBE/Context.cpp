@@ -119,11 +119,6 @@ void QBEContext::add_operation(ILInstructionImpl impl)
     function.instructions.emplace_back(std::move(impl));
 }
 
-std::optional<ILBinding> QBEContext::find(std::wstring_view name)
-{
-    return function().find(name);
-}
-
 ILFunction &QBEContext::add_function(std::wstring name, pType return_type)
 {
     auto &file { program.files[current_file] };
@@ -146,7 +141,7 @@ ILBinding const &QBEContext::add(std::wstring_view name, pType const &type)
     return function().add(name, type);
 }
 
-ILBinding const &QBEContext::add_parameter(std::wstring_view name, pType const &type)
+ILParameter const &QBEContext::add_parameter(std::wstring_view name, pType const &type)
 {
     return function().add_parameter(name, type);
 }

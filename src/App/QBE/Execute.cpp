@@ -11,6 +11,7 @@
 
 #include <App/Parser.h>
 #include <App/QBE/QBE.h>
+#include <variant>
 
 namespace Lia::QBE {
 
@@ -399,15 +400,11 @@ void Frame::dump_frame() const
     }
     trace("  Locals:");
     for (auto const &[ix, l] : locals | std::ranges::views::enumerate) {
-        if (ix > 0) {
-            trace(L"    {}: {:tx}", ix, l);
-        }
+        trace(L"    {}: {:tx}", ix, l);
     }
     trace("  Temporaries:");
     for (auto const &[ix, l] : temporaries | std::ranges::views::enumerate) {
-        if (ix > 0) {
-            trace(L"    {}: {:tx}", ix, l);
-        }
+        trace(L"    {}: {:tx}", ix, l);
     }
     vm.dump_stack();
 }
@@ -672,7 +669,9 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, ILInstruction cons
             return execute(il, frame, impl);
         },
         instruction.impl);
-    frame->dump_frame();
+    if (!std::holds_alternative<DbgLoc>(instruction.impl)) {
+        frame->dump_frame();
+    }
     if (ret) {
         return ret.value();
     }
@@ -694,7 +693,7 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
         if (!vm.globals[file.id].contains(n)) {
             assert((vm.data_pointer + (s.length() + 1) * sizeof(wchar_t)) <= VM::STACK_SIZE);
             QBEValue val { vm.data.data() + vm.data_pointer };
-            trace(L"Set global {} = offset 0x{:04x} ptr 0x{:016x}", file.id, ix, vm.data_pointer, reinterpret_cast<intptr_t>(vm.data.data() + vm.data_pointer));
+            trace(L"Set global 0x{:04x}:0x{:04x} ptr 0x{:016x}", file.id, ix, vm.data_pointer, reinterpret_cast<intptr_t>(vm.data.data() + vm.data_pointer));
             for (auto ch : s) {
                 *((wchar_t *) (vm.data.data() + vm.data_pointer)) = ch;
                 vm.data_pointer += sizeof(wchar_t);
@@ -783,7 +782,12 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
                     ILValue::variable(variable.index, variable.type),
                 }));
         });
+
     QBEValue base_pointer { vm.stack.data() + vm.stack_pointer };
+    trace("Frame status after setup:");
+    frame->dump_frame();
+    trace("==============================================");
+    frame->ip = 0;
     while (true) {
         trace(L"function `{}`[{}] ip {}", function.name, function.instructions.size(), frame->ip);
         if (auto res = execute(function, frame, function.instructions[frame->ip]); !res.has_value()) {

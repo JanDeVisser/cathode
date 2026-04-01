@@ -973,8 +973,17 @@ GenResult generate_qbe_node(ASTNode const &n, Identifier const &impl, QBEContext
     assert(n->bound_type != nullptr);
     assert(n->bound_type.repo != nullptr);
     auto t = ctx.qbe_type(n->bound_type);
-    if (auto binding = ctx.find(impl.identifier); binding) {
-        return QBEOperand { n, ILValue::variable(binding->index, t) };
+    if (is<ReferenceType>(n->bound_type)) {
+        for (auto const &binding : ctx.function().parameters) {
+            if (binding.name == impl.identifier && !binding.var_index) {
+                return QBEOperand { n, ILValue::parameter(binding.param_index, t) };
+            }
+        }
+    }
+    for (auto const &binding : ctx.function().variables) {
+        if (binding.name == impl.identifier) {
+            return QBEOperand { n, ILValue::variable(binding.index, t) };
+        }
     }
     fatal(L"Could not find variable `{}`", impl.identifier);
 }
@@ -1038,35 +1047,35 @@ template<>
 GenResult generate_qbe_node(ASTNode const &n, Parameter const &impl, QBEContext &ctx)
 {
     auto const &param_binding = ctx.add_parameter(impl.name, n->bound_type);
-    if (is<ReferenceType>(n->bound_type)) {
-        return QBEOperand { n, ILValue::null() };
-    }
-    auto const &binding = ctx.add(impl.name, n->bound_type);
-    size_t      sz = n->bound_type->size_of();
-    auto        align = n->bound_type->align_of();
-    auto        param = ILValue::parameter(param_binding.index, ctx.qbe_type(n->bound_type));
-    auto        var = ILValue::variable(binding.index, param.type);
+    auto        param = ILValue::parameter(param_binding.param_index, ctx.qbe_type(n->bound_type));
 
-    std::visit(
-        overloads {
-            [&ctx, &param, &var](BoolType const &) {
-                ctx.add_operation(StoreDef { param, var });
+    if (param_binding.var_index) {
+        auto const &binding = ctx.add(impl.name, n->bound_type);
+        assert(binding.index == *param_binding.var_index);
+        auto   var = ILValue::variable(*param_binding.var_index, param.type);
+        size_t sz = n->bound_type->size_of();
+        auto   align = n->bound_type->align_of();
+        std::visit(
+            overloads {
+                [&ctx, &param, &var](BoolType const &) {
+                    ctx.add_operation(StoreDef { param, var });
+                },
+                [&ctx, &param, &var](IntType const &int_type) {
+                    ctx.add_operation(StoreDef { param, var });
+                },
+                [&ctx, &param, &var](FloatType const &flt_type) {
+                    ctx.add_operation(StoreDef { param, var });
+                },
+                [](std::monostate const &) {
+                    UNREACHABLE();
+                },
+                [&ctx, &param, &var, &align](auto const &descr) {
+                    intptr_t sz = static_cast<intptr_t>(descr.size_of());
+                    ctx.add_operation(BlitDef { param, var, sz });
+                },
             },
-            [&ctx, &param, &var](IntType const &int_type) {
-                ctx.add_operation(StoreDef { param, var });
-            },
-            [&ctx, &param, &var](FloatType const &flt_type) {
-                ctx.add_operation(StoreDef { param, var });
-            },
-            [](std::monostate const &) {
-                UNREACHABLE();
-            },
-            [&ctx, &param, &var, &align](auto const &descr) {
-                intptr_t sz = static_cast<intptr_t>(descr.size_of());
-                ctx.add_operation(BlitDef { param, var, sz });
-            },
-        },
-        n->bound_type->description);
+            n->bound_type->description);
+    }
     return QBEOperand { n, ILValue::null() };
 }
 

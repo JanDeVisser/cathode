@@ -229,6 +229,11 @@ void flatten_type(PointerType const &, ILLayout &layout)
     layout.emplace_back(ILBaseType::L);
 }
 
+void flatten_type(ReferenceType const &, ILLayout &layout)
+{
+    layout.emplace_back(ILBaseType::L);
+}
+
 void flatten_type(SliceType const &, ILLayout &layout)
 {
     layout.emplace_back(ILBaseType::L);
@@ -995,21 +1000,6 @@ ILFunction::ILFunction(ILFile &file, std::wstring name, pType return_type, bool 
 {
 }
 
-std::optional<ILBinding> ILFunction::find(std::wstring_view name)
-{
-    for (auto const &binding : variables) {
-        if (binding.name == name) {
-            return binding;
-        }
-    }
-    for (auto const &binding : parameters) {
-        if (binding.name == name) {
-            return binding;
-        }
-    }
-    return {};
-}
-
 ILBinding const &ILFunction::add(std::wstring_view name, pType const &type)
 {
     info(L"Adding {} size {}", name, variables.size());
@@ -1018,9 +1008,13 @@ ILBinding const &ILFunction::add(std::wstring_view name, pType const &type)
     return ret;
 }
 
-ILBinding const &ILFunction::add_parameter(std::wstring_view name, pType const &type)
+ILParameter const &ILFunction::add_parameter(std::wstring_view name, pType const &type)
 {
-    return parameters.emplace_back(std::wstring { name }, type, parameters.size(), qbe_type(type));
+    std::optional<int> var_index {};
+    if (!is<ReferenceType>(type)) {
+        var_index = variables.size();
+    }
+    return parameters.emplace_back(std::wstring { name }, type, parameters.size(), var_index, qbe_type(type));
 }
 
 ILTemporary const &ILFunction::add_temporary(pType const &type, ILType il_type)

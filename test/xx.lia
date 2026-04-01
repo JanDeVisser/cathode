@@ -1,0 +1,23 @@
+struct X {
+    foo: i32,
+    bar: i32,
+}
+
+func by_value(x: X) i32 {
+    putint(x.foo);
+    putln(" by value")
+    x.foo = 12::i32
+    putint(x.foo);
+    putln(" by value again")
+    return 0::i32
+}
+
+public func main() i32 {
+    x: X
+    x.foo = 12::i32
+    by_value(x)
+    putint(x.foo);
+    putln(" finally")
+    return 0::i32
+}
+

@@ -582,6 +582,14 @@ struct ILBinding {
     ILType       il_type;
 };
 
+struct ILParameter {
+    std::wstring       name;
+    pType              type;
+    int                param_index;
+    std::optional<int> var_index;
+    ILType             il_type;
+};
+
 struct ILTemporary {
     int    index;
     pType  type;
@@ -589,6 +597,7 @@ struct ILTemporary {
 };
 
 using ILBindings = std::vector<ILBinding>;
+using ILParameters = std::vector<ILParameter>;
 
 struct ILFunction {
     size_t                     file_id;
@@ -597,18 +606,17 @@ struct ILFunction {
     bool                       exported { false };
     intptr_t                   ret_allocation { 0 };
     size_t                     id;
-    ILBindings                 parameters {};
+    ILParameters               parameters {};
     ILBindings                 variables {};
     std::vector<ILTemporary>   temps {};
     std::vector<ILInstruction> instructions {};
     std::vector<size_t>        labels {};
 
     ILFunction(ILFile &file, std::wstring name, pType return_type, bool exported);
-    std::optional<ILBinding> find(std::wstring_view name);
-    ILBinding const         &add(std::wstring_view name, pType const &type);
-    ILBinding const         &add_parameter(std::wstring_view name, pType const &type);
-    ILTemporary const       &add_temporary(pType const &type, ILType il_type);
-    friend std::wostream    &operator<<(std::wostream &os, ILFunction const &function);
+    ILBinding const      &add(std::wstring_view name, pType const &type);
+    ILParameter const    &add_parameter(std::wstring_view name, pType const &type);
+    ILTemporary const    &add_temporary(pType const &type, ILType il_type);
+    friend std::wostream &operator<<(std::wostream &os, ILFunction const &function);
 };
 
 struct ILFile {
@@ -750,19 +758,18 @@ struct QBEContext {
     size_t    current_file;
     size_t    current_function;
 
-    ILFunction              &add_function(std::wstring name, pType return_type);
-    ILValue                  add_string(std::wstring_view s);
-    ILValue                  add_cstring(std::string_view s);
-    ILValue                  add_enumeration(pType const &enum_type);
-    ILType                   qbe_type(pType const &type);
-    void                     add_operation(ILInstructionImpl impl);
-    std::optional<ILBinding> find(std::wstring_view name);
-    ILBinding const         &add(std::wstring_view name, pType const &type);
-    ILBinding const         &add_parameter(std::wstring_view name, pType const &type);
-    ILTemporary const       &add_temporary(pType const &type);
-    void                     push();
-    void                     pop();
-    ILFunction              &function();
+    ILFunction        &add_function(std::wstring name, pType return_type);
+    ILValue            add_string(std::wstring_view s);
+    ILValue            add_cstring(std::string_view s);
+    ILValue            add_enumeration(pType const &enum_type);
+    ILType             qbe_type(pType const &type);
+    void               add_operation(ILInstructionImpl impl);
+    ILBinding const   &add(std::wstring_view name, pType const &type);
+    ILParameter const &add_parameter(std::wstring_view name, pType const &type);
+    ILTemporary const &add_temporary(pType const &type);
+    void               push();
+    void               pop();
+    ILFunction        &function();
 };
 
 struct Frame {

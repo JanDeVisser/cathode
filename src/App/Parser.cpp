@@ -1349,17 +1349,17 @@ ASTNode parse_extern(Parser &parser)
     auto &lexer { parser.lexer };
     auto  ext { lexer.lex() };
 
-    auto res = lexer.expect(TokenKind::QuotedString);
-    if (!res.has_value() || res.value().quoted_string().quote_type != QuoteType::DoubleQuote) {
-        parser.append(res.error(), "Expected extern library name");
-        return {};
+    auto         token = lexer.peek();
+    std::wstring library {};
+    if (token.kind == TokenKind::QuotedString) {
+        lexer.lex();
+        library = parser.text_of(token);
+        if (library.length() <= 2) {
+            parser.append(token, "Invalid extern library name");
+            return {};
+        }
+        library = library.substr(0, library.size() - 1).substr(1);
     }
-    auto library = parser.text_of(res.value());
-    if (library.length() <= 2) {
-        parser.append(res.value(), "Invalid extern library name");
-        return {};
-    }
-    library = library.substr(0, library.size() - 1).substr(1);
 
     if (!lexer.expect_symbol('{')) {
         parser.append(lexer.last_location, "Expected '{");
@@ -1390,7 +1390,7 @@ ASTNode parse_extern(Parser &parser)
     }
 
     return parser.make_node<Extern>(
-        ext.location + res.value().location,
+        ext.location + lexer.last_location,
         functions,
         std::wstring { library });
 }

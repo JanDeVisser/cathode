@@ -647,6 +647,7 @@ struct ILFile {
 struct ILProgram {
     std::wstring        name;
     std::vector<ILFile> files;
+    Strings             libraries {};
 };
 
 struct QBEValue {

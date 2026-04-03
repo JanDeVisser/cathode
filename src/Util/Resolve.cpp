@@ -141,6 +141,11 @@ DLResult<LibHandle> Resolver::Library::open()
         if (!ret.has_value()) {
             ret = try_open(fs::path { "/" } / "usr" / "lib64");
         }
+#ifdef __APPLE__
+        if (!ret.has_value()) {
+            ret = try_open(fs::path { "/" } / "opt" / "homebrew" / "lib");
+        }
+#endif
         if (!ret.has_value()) {
             ret = try_open(fs::current_path());
         }

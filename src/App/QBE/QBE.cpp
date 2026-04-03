@@ -906,6 +906,9 @@ GenResult generate_qbe_node(ASTNode const &n, ExpressionList const &impl, QBECon
 template<>
 GenResult generate_qbe_node(ASTNode const &n, Extern const &impl, QBEContext &ctx)
 {
+    if (!impl.library.empty()) {
+        ctx.program.libraries.emplace_back(impl.library);
+    }
     return QBEOperand { n, ILValue::null() };
 }
 
@@ -1322,6 +1325,10 @@ std::expected<void, std::wstring> compile_qbe(ILProgram const &program)
             std::format("-L{}/lib", Lia::lia_dir().string()),
             "-lliart", "-lm", "-lpthread", "-ldl"
         };
+        for (auto const &lib : program.libraries) {
+            auto l { (lib.starts_with(L"lib")) ? lib.substr(3) : lib };
+            ld_args.emplace_back(std::format("-l{}", as_utf8(l)));
+        }
         if (has_option("L")) {
             for (auto const &lib_path : get_option_values("L")) {
                 ld_args.push_back(std::format("-L{}", lib_path));

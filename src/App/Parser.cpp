@@ -31,6 +31,7 @@ using namespace std::literals;
 using namespace Util;
 
 static ASTNode parse_alias(Parser &parser);
+static ASTNode parse_export_public(Parser &parser);
 static ASTNode parse_extern(Parser &parser);
 static ASTNode parse_func_decl(Parser &parser, Parser::Token const &func);
 static ASTNode parse_c_type(Parser &parser);
@@ -185,6 +186,8 @@ ASTNode Parser::parse_module_level_statement()
             return parse_module_level_statement();
         case LiaKeyword::Enum:
             return parse_enum();
+        case LiaKeyword::Export:
+            return parse_export_public(*this);
         case LiaKeyword::Extern:
             return parse_extern(*this);
         case LiaKeyword::Func:
@@ -248,6 +251,8 @@ ASTNode Parser::parse_statement()
             return parse_embed();
         case LiaKeyword::Enum:
             return parse_enum();
+        case LiaKeyword::Export:
+            return parse_export_public(*this);
         case LiaKeyword::For:
             return parse_for();
         case LiaKeyword::Func:
@@ -1572,42 +1577,49 @@ ASTNode Parser::parse_loop()
     return ret;
 }
 
-ASTNode Parser::parse_public()
+ASTNode parse_export_public(Parser &parser)
 {
-    auto t = lexer.peek();
-    assert(t.matches_keyword(LiaKeyword::Public));
+    auto &lexer { parser.lexer };
+    auto  t = lexer.peek();
+    auto  kw { t.keyword() };
     lexer.lex();
-    auto decl = parse_module_level_statement();
+    auto decl = parser.parse_module_level_statement();
     if (decl == nullptr) {
         return {};
     }
     std::optional<std::wstring> name = std::visit(
         overloads {
-            [](Enum const &n) -> std::optional<std::wstring> {
-                return n.name;
-            },
             [](FunctionDefinition const &n) -> std::optional<std::wstring> {
                 return n.name;
             },
-            [this, &decl](PublicDeclaration const &n) -> std::optional<std::wstring> {
-                append(decl->location, L"Double public declaration");
+            [&parser, &decl](ExportDeclaration const &n) -> std::optional<std::wstring> {
+                parser.append(decl->location, L"Double public/export declaration");
                 return {};
             },
-            [](Struct const &n) -> std::optional<std::wstring> {
-                return n.name;
+            [&parser, &decl](PublicDeclaration const &n) -> std::optional<std::wstring> {
+                parser.append(decl->location, L"Double public/export declaration");
+                return {};
             },
             [](VariableDeclaration const &n) -> std::optional<std::wstring> {
                 return n.name;
             },
-            [this, &decl](auto const &) -> std::optional<std::wstring> {
-                append(decl->location, "Cannot declare statement of type `{}` public", SyntaxNodeType_name(decl->type()));
+            [&parser, &decl](auto const &) -> std::optional<std::wstring> {
+                parser.append(decl->location, "Cannot declare statement of type `{}` export or public", SyntaxNodeType_name(decl->type()));
                 return {};
             } },
         decl->node);
     if (!name) {
         return {};
     }
-    return make_node<PublicDeclaration>(t.location + decl->location, *name, decl);
+    if (kw == LiaKeyword::Public) {
+        return parser.make_node<PublicDeclaration>(t.location + decl->location, *name, decl);
+    }
+    return parser.make_node<ExportDeclaration>(t.location + decl->location, *name, decl);
+}
+
+ASTNode Parser::parse_public()
+{
+    return parse_export_public(*this);
 }
 
 ASTNode Parser::parse_return()

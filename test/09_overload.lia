@@ -1,4 +1,4 @@
-public func main() i32 {
+export func main() i32 {
     x8: i8 = 8::i8
     x16: i16 = 16::i16
     x32: i32 = 32::i32

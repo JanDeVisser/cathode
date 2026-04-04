@@ -10,7 +10,7 @@ func ret_opt(ok: bool) ?i64 {
     return 69
 }
 
-public func main() i32 {
+export func main() i32 {
     x: ?i64 = ret_opt(true)
     putint(x || 420)
     endln()

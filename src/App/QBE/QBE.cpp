@@ -654,15 +654,15 @@ GenResult generate_qbe_node(ASTNode const &n, Call const &impl, QBEContext &ctx)
 {
     auto def = get<FunctionDefinition>(impl.function);
     auto decl = get<FunctionDeclaration>(def.declaration);
-    auto name = std::visit(
+    auto name { std::visit(
         overloads {
-            [](ExternLink const &link) -> std::wstring_view {
+            [](ExternLink const &link) -> std::wstring {
                 return link.link_name;
             },
-            [&def](auto const &) -> std::wstring_view {
-                return def.name;
+            [&def, &impl](auto const &) -> std::wstring {
+                return def.mangled_name(impl.function);
             } },
-        def.implementation->node);
+        def.implementation->node) };
     ILValue              ret_val { ILValue::null() };
     ILValue              ret_alloc { ILValue::null() };
     size_t               alloc_sz { 0 };
@@ -986,8 +986,11 @@ GenResult generate_qbe_node(ASTNode const &n, FunctionDefinition const &impl, QB
         ctx.current_function = 0;
     }
     if (!is<ExternLink>(impl.implementation)) {
+        ctx.is_export = impl.visibility != Visibility::Static;
+        ctx.add_function(impl.mangled_name(n), get<FunctionType>(n->bound_type).result);
         TRY_GENERATE(impl.declaration, ctx);
         TRY_GENERATE(impl.implementation, ctx);
+        ctx.is_export = false;
     }
     return QBEOperand { n, ILValue::null() };
 }
@@ -996,9 +999,6 @@ template<>
 GenResult generate_qbe_node(ASTNode const &n, FunctionDeclaration const &impl, QBEContext &ctx)
 {
     trace(L"Generating function `{}` -> {}", impl.name, get<TypeType>(impl.return_type->bound_type).type->to_string());
-    ctx.add_function(
-        impl.name,
-        get<TypeType>(impl.return_type->bound_type).type);
     auto _ = generate_qbe_nodes(impl.parameters, ctx);
     return QBEOperand { n, ILValue::null() };
 }

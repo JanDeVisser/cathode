@@ -1,3 +1,3 @@
-public func main() i32 {
+export func main() i32 {
     return (2::i32 + 3::i32) * 4::i32;
 }

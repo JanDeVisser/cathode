@@ -40,6 +40,7 @@ using Precedence = uint16_t;
     S(Enum, "enum")            \
     S(Equals, "==")            \
     S(Error, "error")          \
+    S(Export, "export")        \
     S(Extern, "extern")        \
     S(ExternLink, "->")        \
     S(False, "false")          \

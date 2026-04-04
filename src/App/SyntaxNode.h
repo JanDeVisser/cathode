@@ -42,6 +42,7 @@ using namespace Util;
     S(Embed)               \
     S(Enum)                \
     S(EnumValue)           \
+    S(ExportDeclaration)   \
     S(ExpressionList)      \
     S(Extern)              \
     S(ExternLink)          \
@@ -200,6 +201,12 @@ struct Namespace {
     void                   register_variable(std::wstring name, ASTNode node);
 };
 
+enum class Visibility {
+    Static,
+    Public,
+    Export,
+};
+
 struct Alias {
     std::wstring name;
     ASTNode      aliased_type;
@@ -298,6 +305,13 @@ struct Enum {
     Enum(std::wstring name, ASTNode underlying_type, ASTNodes values);
 };
 
+struct ExportDeclaration {
+    std::wstring name;
+    ASTNode      declaration;
+
+    ExportDeclaration(std::wstring name, ASTNode declaration);
+};
+
 struct ExpressionList {
     ASTNodes expressions;
 
@@ -338,11 +352,13 @@ struct FunctionDefinition {
     std::wstring name;
     ASTNode      declaration;
     ASTNode      implementation;
+    Visibility   visibility { Visibility::Static };
 
     FunctionDefinition(std::wstring name, ASTNode declaration, ASTNode implementation);
     FunctionDefinition(std::wstring name);
-    ASTNode instantiate(ASTNode const &n, std::vector<pType> const &generic_args) const;
-    ASTNode instantiate(ASTNode const &n, std::map<std::wstring, pType> const &generic_args) const;
+    ASTNode      instantiate(ASTNode const &n, std::vector<pType> const &generic_args) const;
+    ASTNode      instantiate(ASTNode const &n, std::map<std::wstring, pType> const &generic_args) const;
+    std::wstring mangled_name(ASTNode const &n) const;
 };
 
 struct Identifier {
@@ -616,6 +632,7 @@ struct VariableDeclaration {
     ASTNode      type_name {};
     ASTNode      initializer;
     bool         is_const;
+    Visibility   visibility { Visibility::Static };
 
     VariableDeclaration(std::wstring name, ASTNode type_name, ASTNode initializer, bool is_const);
 };
@@ -681,6 +698,7 @@ using SyntaxNode = std::variant<Dummy,
     Embed,
     Enum,
     EnumValue,
+    ExportDeclaration,
     ExpressionList,
     Extern,
     ExternLink,

@@ -212,6 +212,25 @@ ASTNode normalize(ASTNode n, Enum const &impl)
 }
 
 template<>
+ASTNode normalize(ASTNode n, ExportDeclaration const &impl)
+{
+    auto normalized { normalize(impl.declaration) };
+    std::visit(
+        overloads {
+            [](FunctionDefinition &impl) {
+                impl.visibility = Visibility::Export;
+            },
+            [](VariableDeclaration &impl) {
+                impl.visibility = Visibility::Export;
+            },
+            [](auto &) {
+                UNREACHABLE();
+            } },
+        normalized->node);
+    return normalized;
+}
+
+template<>
 ASTNode normalize(ASTNode n, ExpressionList const &impl)
 {
     return make_node<ExpressionList>(n, normalize(impl.expressions));
@@ -396,7 +415,20 @@ ASTNode normalize(ASTNode n, Program const &impl)
 template<>
 ASTNode normalize(ASTNode n, PublicDeclaration const &impl)
 {
-    return make_node<PublicDeclaration>(n, impl.name, normalize(impl.declaration));
+    auto normalized { normalize(impl.declaration) };
+    std::visit(
+        overloads {
+            [](FunctionDefinition &impl) {
+                impl.visibility = Visibility::Public;
+            },
+            [](VariableDeclaration &impl) {
+                impl.visibility = Visibility::Public;
+            },
+            [](auto &) {
+                UNREACHABLE();
+            } },
+        normalized->node);
+    return normalized;
 }
 
 template<>

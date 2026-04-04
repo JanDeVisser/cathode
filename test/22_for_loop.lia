@@ -1,4 +1,4 @@
-public func main() i32
+export func main() i32
 {
 	for x in 0..10 {
 		putint(x)

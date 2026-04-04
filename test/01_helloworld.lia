@@ -1,4 +1,4 @@
-public func main() i32 {
+export func main() i32 {
   puts("Hello, World!\n")
   return 0::i32
 }

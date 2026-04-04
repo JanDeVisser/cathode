@@ -21,7 +21,7 @@ func by_reference(x: &X) i32 {
     return 0::i32
 }
 
-public func main() i32 {
+export func main() i32 {
     x: X
     x.foo = 12::i32
     by_reference(x)

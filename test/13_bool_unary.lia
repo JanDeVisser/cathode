@@ -1,4 +1,4 @@
-public func main() i32 {
+export func main() i32 {
     b: bool = 69 > 420
     if (!b) {
         putln("Correct")

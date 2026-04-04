@@ -1,4 +1,4 @@
-public func main() i32 {
+export func main() i32 {
     x := 0
     while x < 10 {
         putint(x)

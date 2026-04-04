@@ -8,7 +8,7 @@ struct Y {
     bar: i64,
 }
 
-public func main() i32 {
+export func main() i32 {
     y: Y = { X.A = "quux", 42 }
     s := must y.foo.A
     putln(s)

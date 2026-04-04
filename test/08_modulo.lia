@@ -1,4 +1,4 @@
-public func main() i32
+export func main() i32
 {
     x := 7;
 	putb((x % 2) == 0);

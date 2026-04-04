@@ -496,12 +496,13 @@ BindResult bind(ASTNode n, Call &impl)
         auto const &decl = get<FunctionDeclaration>(def.declaration);
         if (decl.generics.empty()) {
             auto const &func_type_descr = get<FunctionType>(def.declaration->bound_type);
-            if (type_descr.types.size() != func_type_descr.parameters.size()) {
+            auto const &func_params_descr = get<TypeList>(func_type_descr.parameters);
+            if (type_descr.types.size() != func_params_descr.types.size()) {
                 return nullptr;
             }
             ASTNodes reference_nodes;
             auto     made_reference_node { false };
-            for (auto [ix, arg_param] : std::views::zip(args, type_descr.types, func_type_descr.parameters) | std::ranges::views::enumerate) {
+            for (auto [ix, arg_param] : std::views::zip(args, type_descr.types, func_params_descr.types) | std::ranges::views::enumerate) {
                 auto [arg, arg_type, param_type] { arg_param };
                 auto arg_value = arg_type->value_type();
                 auto param_value = param_type->value_type();
@@ -620,7 +621,7 @@ BindResult bind(ASTNode n, Call &impl)
     if (impl.function != nullptr) {
         auto const &func { get<FunctionDefinition>(impl.function) };
         auto const &func_type_descr { get<FunctionType>(func.declaration->bound_type) };
-        auto const &param_types { func_type_descr.parameters };
+        auto const &param_types { get<TypeList>(func_type_descr.parameters).types };
         for (auto const &[arg, param_type] : std::ranges::views::zip(args, param_types)) {
         }
         return func_type_descr.result;
@@ -916,10 +917,8 @@ BindResult bind(ASTNode n, FunctionDefinition &impl)
             parser.register_variable(parameter.name, param);
         }
     }
-    if (auto impl_type = bind(impl.implementation); impl.implementation->status != ASTStatus::Bound) {
-        return impl_type;
-    }
-    return TypeRegistry::void_;
+    try_bind(impl.implementation);
+    return t;
 }
 
 template<class N>

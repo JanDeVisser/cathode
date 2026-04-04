@@ -1,7 +1,7 @@
 func strlen(s: cstring) u64 -> "libc:strlen"
 func putcstr(s: cstring) void -> "libc:puts"
 
-public func main() i32 {
+export func main() i32 {
     s := `Hello, World!`
     putcstr(s)
     return 0::i32

@@ -61,12 +61,34 @@ std::wstring type_name(pType const &type)
     return type ? (type->name) : L"nullptr";
 }
 
+std::wstring IntType::to_string() const
+{
+    return std::format(L"{:c}{}", (is_signed) ? 'i' : 'u', width_bits);
+}
+
+std::wstring IntType::encode() const
+{
+    return std::format(L"{:1x}", (size_of() - 1) | (is_signed ? 1 : 0));
+}
+
+std::wstring FloatType::to_string() const
+{
+    return std::format(L"f{}", width_bits);
+}
+
+std::wstring FloatType::encode() const
+{
+    return std::format(L"{:1x}", size_of());
+}
+
 std::wstring FunctionType::to_string() const
 {
-    return std::format(
-        L"Func({}) {}",
-        join_elements(parameters, L", "sv, [](pType const &t) { return type_name(t); }),
-        result->name);
+    return std::format(L"Func{} {}", parameters->name, result->name);
+}
+
+std::wstring FunctionType::encode() const
+{
+    return std::format(L"{}{}", parameters->encode(), result->encode());
 }
 
 std::wstring TypeList::to_string() const
@@ -92,9 +114,25 @@ intptr_t TypeList::align_of() const
     return ret;
 }
 
+std::wstring TypeList::encode() const
+{
+    std::wstring ret { std::format(L"{:1x}", types.size()) };
+    std::ranges::for_each(
+        types,
+        [&ret](pType const &t) {
+            ret += t->encode();
+        });
+    return ret;
+}
+
 std::wstring ReferenceType::to_string() const
 {
     return std::format(L"&{}", type_name(referencing));
+}
+
+std::wstring ReferenceType::encode() const
+{
+    return referencing->encode();
 }
 
 std::wstring SliceType::to_string() const
@@ -102,14 +140,29 @@ std::wstring SliceType::to_string() const
     return std::format(L"SliceOf({})", type_name(slice_of));
 }
 
+std::wstring SliceType::encode() const
+{
+    return slice_of->encode();
+}
+
 std::wstring ZeroTerminatedArray::to_string() const
 {
     return std::format(L"ZeroTerminatedArrayOf({})", type_name(array_of));
 }
 
+std::wstring ZeroTerminatedArray::encode() const
+{
+    return array_of->encode();
+}
+
 std::wstring Array::to_string() const
 {
     return std::format(L"ArrayOf({}[{}])", type_name(array_of), size);
+}
+
+std::wstring Array::encode() const
+{
+    return array_of->encode();
 }
 
 intptr_t Array::size_of() const
@@ -127,9 +180,19 @@ std::wstring DynArray::to_string() const
     return std::format(L"DynArrayOf({})", type_name(array_of));
 }
 
+std::wstring DynArray::encode() const
+{
+    return array_of->encode();
+}
+
 std::wstring RangeType::to_string() const
 {
     return std::format(L"RangeOf({})", type_name(range_of));
+}
+
+std::wstring RangeType::encode() const
+{
+    return range_of->encode();
 }
 
 intptr_t RangeType::size_of() const
@@ -157,9 +220,19 @@ intptr_t TypeAlias::align_of() const
     return alias_of->align_of();
 }
 
+std::wstring TypeAlias::encode() const
+{
+    return alias_of->encode();
+}
+
 std::wstring EnumType::to_string() const
 {
     return std::format(L"Enum({} values)", values.size());
+}
+
+std::wstring EnumType::encode() const
+{
+    return std::format(L"{}{:1x}", underlying_type->encode(), values.size());
 }
 
 intptr_t EnumType::size_of() const
@@ -202,6 +275,22 @@ pType EnumType::underlying() const
 std::wstring TaggedUnionType::to_string() const
 {
     return std::format(L"TaggedUnion({} tags)", tags.size());
+}
+
+std::wstring TaggedUnionType::encode() const
+{
+    auto ret { tag_type->encode() };
+    std::for_each(
+        tags.begin(),
+        tags.end(),
+        [&ret, this](Tag const &tag) -> void {
+            if (tag.payload) {
+                ret += tag.payload->encode();
+            } else {
+                ret += TypeRegistry::the().void_->encode();
+            }
+        });
+    return ret;
 }
 
 intptr_t TaggedUnionType::size_of() const
@@ -276,9 +365,30 @@ intptr_t TaggedUnionType::tag_offset() const
     return alignat(ret, tag_type->align_of());
 }
 
+std::wstring PointerType::to_string() const
+{
+    return std::format(L"Pointer({})", referencing->to_string());
+}
+
+std::wstring PointerType::encode() const
+{
+    return referencing->encode();
+}
+
 std::wstring StructType::to_string() const
 {
     return std::format(L"Struct({} fields)", fields.size());
+}
+
+std::wstring StructType::encode() const
+{
+    auto ret { std::format(L"{:1x}", fields.size()) };
+    std::ranges::for_each(
+        fields,
+        [&ret, this](Field const &fld) -> void {
+            ret += fld.type->encode();
+        });
+    return ret;
 }
 
 intptr_t StructType::size_of() const
@@ -323,6 +433,11 @@ std::wstring OptionalType::to_string() const
     return std::format(L"OptionalOf({})", type_name(type));
 }
 
+std::wstring OptionalType::encode() const
+{
+    return type->encode();
+}
+
 intptr_t OptionalType::size_of() const
 {
     return TypeRegistry::boolean->size_of() + type->size_of();
@@ -336,6 +451,11 @@ intptr_t OptionalType::align_of() const
 std::wstring ResultType::to_string() const
 {
     return std::format(L"Result({}/{})", type_name(success), type_name(error));
+}
+
+std::wstring ResultType::encode() const
+{
+    return success->encode() + error->encode();
 }
 
 intptr_t ResultType::size_of() const
@@ -360,6 +480,11 @@ std::wstring TypeType::to_string() const
     return std::format(L"TypeOf({})", type->to_string());
 }
 
+std::wstring TypeType::encode() const
+{
+    return type->encode();
+}
+
 bool Type::is_a(TypeKind kind) const
 {
     return description.index() == static_cast<int>(kind);
@@ -375,14 +500,32 @@ std::wstring Type::to_string() const
     return std::format(
         L"{}: {}",
         name,
-        std::visit(overloads {
-                       [](std::monostate const &) -> std::wstring {
-                           UNREACHABLE();
-                           return L"";
-                       },
-                       [](auto const &descr) -> std::wstring {
-                           return descr.to_string();
-                       } },
+        std::visit(
+            overloads {
+                [](std::monostate const &) -> std::wstring {
+                    UNREACHABLE();
+                    return L"";
+                },
+                [](auto const &descr) -> std::wstring {
+                    return descr.to_string();
+                } },
+            description));
+}
+
+std::wstring Type::encode() const
+{
+    return std::format(
+        L"{:c}{}",
+        static_cast<int>(kind()) + 'a',
+        std::visit(
+            overloads {
+                [](std::monostate const &) -> std::wstring {
+                    UNREACHABLE();
+                    return L"";
+                },
+                [](auto const &descr) -> std::wstring {
+                    return descr.encode();
+                } },
             description));
 }
 
@@ -791,28 +934,24 @@ pType TypeRegistry::result_of(pType success, pType error)
 
 pType TypeRegistry::function_of(std::vector<pType> const &parameters, pType result)
 {
+    pType params_type_list = typelist_of(parameters);
     for (auto const &t : types) {
-        if (std::visit(overloads {
-                           [&parameters, &result](FunctionType const &descr) -> bool {
-                               return descr.parameters == parameters && descr.result == result;
-                           },
-                           [](auto const &x) -> bool {
-                               return false;
-                           } },
+        if (std::visit(
+                overloads {
+                    [&params_type_list, &result](FunctionType const &descr) -> bool {
+                        return descr.parameters == params_type_list && descr.result == result;
+                    },
+                    [](auto const &x) -> bool {
+                        return false;
+                    } },
                 t.description)) {
             return t.id;
         }
     }
 
     auto ret = make_type(
-        std::format(
-            L"func({}) {}",
-            join_elements(
-                parameters,
-                std::wstring_view { L"," },
-                [](pType const &t) -> std::wstring { return t->name; }),
-            result->name),
-        FunctionType { parameters, result });
+        std::format(L"func{} {}", params_type_list->name, result->name),
+        FunctionType { params_type_list, result });
     return ret;
 }
 

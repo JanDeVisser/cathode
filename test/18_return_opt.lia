@@ -11,7 +11,7 @@ func ret_opt(ok: bool) ?X {
     return x
 }
 
-public func main() i32 {
+export func main() i32 {
     x := ret_opt(true)
     if (x) {
         putint((must x).bar)

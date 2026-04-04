@@ -42,12 +42,12 @@ namespace Lia {
     S(Array)               \
     S(DynArray)            \
     S(RangeType)           \
-    S(TypeAlias)           \
     S(EnumType)            \
     S(TaggedUnionType)     \
     S(OptionalType)        \
     S(ResultType)          \
     S(StructType)          \
+    S(TypeAlias)           \
     S(TypeType)
 
 enum class TypeKind {
@@ -90,10 +90,8 @@ struct IntType {
     static IntType i32;
     static IntType i64;
 
-    std::wstring to_string() const
-    {
-        return std::format(L"{:c}{}", (is_signed) ? 'i' : 'u', width_bits);
-    }
+    std::wstring encode() const;
+    std::wstring to_string() const;
 
     intptr_t size_of() const
     {
@@ -112,10 +110,8 @@ struct FloatType {
     static FloatType f32;
     static FloatType f64;
 
-    std::wstring to_string() const
-    {
-        return std::format(L"f{}", width_bits);
-    }
+    std::wstring to_string() const;
+    std::wstring encode() const;
 
     intptr_t size_of() const
     {
@@ -143,6 +139,11 @@ struct BoolType {
     {
         return 1;
     }
+
+    std::wstring encode() const
+    {
+        return L"";
+    }
 };
 
 struct VoidType {
@@ -160,14 +161,17 @@ struct VoidType {
     {
         return 0;
     }
+
+    std::wstring encode() const
+    {
+        return L"";
+    }
 };
 
 struct PointerType {
     pType        referencing;
-    std::wstring to_string() const
-    {
-        return L"Pointer";
-    }
+    std::wstring to_string() const;
+    std::wstring encode() const;
 
     intptr_t size_of() const
     {
@@ -195,13 +199,19 @@ struct NamespaceType {
     {
         return 0;
     }
+
+    std::wstring encode() const
+    {
+        return L"";
+    }
 };
 
 struct FunctionType {
-    std::vector<pType> parameters;
-    pType              result;
+    pType parameters;
+    pType result;
 
     std::wstring to_string() const;
+    std::wstring encode() const;
 
     intptr_t size_of() const
     {
@@ -220,6 +230,7 @@ struct TypeList {
     std::wstring to_string() const;
     intptr_t     size_of() const;
     intptr_t     align_of() const;
+    std::wstring encode() const;
 };
 
 struct GenericParameter {
@@ -239,11 +250,17 @@ struct GenericParameter {
     {
         return 0;
     }
+
+    std::wstring encode() const
+    {
+        return L"";
+    }
 };
 
 struct ReferenceType {
     pType        referencing;
     std::wstring to_string() const;
+    std::wstring encode() const;
 
     intptr_t size_of() const
     {
@@ -259,6 +276,7 @@ struct ReferenceType {
 struct SliceType {
     pType        slice_of;
     std::wstring to_string() const;
+    std::wstring encode() const;
 
     intptr_t size_of() const
     {
@@ -274,6 +292,7 @@ struct SliceType {
 struct ZeroTerminatedArray {
     pType        array_of;
     std::wstring to_string() const;
+    std::wstring encode() const;
 
     intptr_t size_of() const
     {
@@ -293,11 +312,13 @@ struct Array {
     std::wstring to_string() const;
     intptr_t     size_of() const;
     intptr_t     align_of() const;
+    std::wstring encode() const;
 };
 
 struct DynArray {
     pType        array_of;
     std::wstring to_string() const;
+    std::wstring encode() const;
 
     intptr_t size_of() const
     {
@@ -316,6 +337,7 @@ struct RangeType {
     std::wstring to_string() const;
     intptr_t     size_of() const;
     intptr_t     align_of() const;
+    std::wstring encode() const;
 };
 
 struct TypeAlias {
@@ -323,6 +345,7 @@ struct TypeAlias {
     std::wstring to_string() const;
     intptr_t     size_of() const;
     intptr_t     align_of() const;
+    std::wstring encode() const;
 };
 
 struct EnumType {
@@ -341,6 +364,7 @@ struct EnumType {
     bool                   is_valid(std::wstring_view label) const;
     std::optional<int64_t> value_for(std::wstring_view label) const;
     pType                  underlying() const;
+    std::wstring           encode() const;
 };
 
 struct TaggedUnionType {
@@ -362,6 +386,7 @@ struct TaggedUnionType {
     pType                  payload_for(int64_t tag) const;
     pType                  underlying() const;
     intptr_t               tag_offset() const;
+    std::wstring           encode() const;
 };
 
 template<class S>
@@ -379,6 +404,7 @@ struct StructType {
     std::wstring to_string() const;
     intptr_t     size_of() const;
     intptr_t     align_of() const;
+    std::wstring encode() const;
 
     auto field(std::wstring_view field_name)
     {
@@ -396,6 +422,7 @@ struct OptionalType {
     std::wstring to_string() const;
     intptr_t     size_of() const;
     intptr_t     align_of() const;
+    std::wstring encode() const;
 };
 
 struct ResultType {
@@ -406,12 +433,14 @@ struct ResultType {
     intptr_t     size_of() const;
     intptr_t     align_of() const;
     intptr_t     flag_offset() const;
+    std::wstring encode() const;
 };
 
 struct TypeType {
     pType type;
 
     std::wstring to_string() const;
+    std::wstring encode() const;
     intptr_t     size_of() const
     {
         return 0;
@@ -452,6 +481,7 @@ struct Type {
     bool                          compatible(pType const &other) const;
     bool                          assignable_to(pType const &lhs) const;
     std::map<std::wstring, pType> infer_generic_arguments(pType const &param_type) const;
+    std::wstring                  encode() const;
 };
 
 struct TypeRegistry {

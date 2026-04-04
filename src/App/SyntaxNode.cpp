@@ -194,6 +194,13 @@ UnaryExpression::UnaryExpression(Operator const op, ASTNode operand)
 {
 }
 
+ExportDeclaration::ExportDeclaration(std::wstring name, ASTNode declaration)
+    : name(std::move(name))
+    , declaration(std::move(declaration))
+{
+    assert(this->declaration != nullptr);
+}
+
 ExpressionList::ExpressionList(ASTNodes expressions)
     : expressions(std::move(expressions))
 {
@@ -224,6 +231,20 @@ FunctionDefinition::FunctionDefinition(std::wstring name, ASTNode declaration, A
     , implementation(std::move(implementation))
 {
     assert(this->declaration != nullptr);
+}
+
+std::wstring FunctionDefinition::mangled_name(ASTNode const &n) const
+{
+    switch (visibility) {
+    case Visibility::Static:
+    case Visibility::Public:
+        assert(n->bound_type);
+        return std::format(L"{}${}", name, n->bound_type->encode());
+    case Visibility::Export:
+        return name;
+    default:
+        UNREACHABLE();
+    }
 }
 
 FunctionDefinition::FunctionDefinition(std::wstring name)

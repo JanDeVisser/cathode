@@ -16,7 +16,7 @@ func ret_result(ok: bool) X/E {
     return x
 }
 
-public func main() i32 {
+export func main() i32 {
     x := ret_result(true)
     if (x) {
         putint((must x).bar)

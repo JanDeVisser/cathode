@@ -6,7 +6,7 @@ enum X: u64 {
     Last = 69420,
 }
 
-public func main() i32 {
+export func main() i32 {
     y := X.Another;
     putln(#y)
     return 0::i32

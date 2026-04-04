@@ -3,7 +3,7 @@ struct Foo {
     bar: i64,
 }
 
-public func main() i32
+export func main() i32
 {
     foo: Foo = { 69, 420 }
     putint(foo.foo)

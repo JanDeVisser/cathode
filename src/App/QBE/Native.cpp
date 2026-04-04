@@ -17,10 +17,13 @@ extern "C" {
 
 struct ARM64Trampoline {
     Lia::void_t fnc { nullptr };
-    uint64_t    x[8] { 0, 0, 0, 0, 0, 0, 0, 0 };
-    double      d[8] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
-    uint64_t    int_return_value { 0 };
-    double      double_return_value { 0.0 };
+    union {
+        uint64_t x[8] { 0, 0, 0, 0, 0, 0, 0, 0 };
+        uint8_t  x_flat[64];
+    };
+    double   d[8] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+    uint64_t int_return_value { 0 };
+    double   double_return_value { 0.0 };
 };
 
 struct X86_64Trampoline {
@@ -140,18 +143,14 @@ bool native_call_arm64(std::string_view name, void *params, std::vector<ILType> 
                     allocate_value(bt, p, offset);
                     offset += alignat(size_of(bt), 8);
                 },
-                [&allocate_value, &offset, &p](ILType::ILAggregate const &aggregate) {
+                [&t, &allocate_value, &offset, &p, &int_reg, &type](ILType::ILAggregate const &aggregate) {
                     int   align { 0 };
                     auto *mem = p + offset;
                     offset += alignat(sizeof(void *), 8);
 
-                    auto fld_offset = 0;
-                    for (auto comp : aggregate.layout) {
-                        fld_offset = alignat(fld_offset, align_of(comp));
-                        allocate_value(comp, mem, fld_offset);
-                        align = std::max(align, align_of(comp));
-                        fld_offset += size_of(comp);
-                    }
+                    assert(int_reg + (alignat(size_of(type), 8) / 8) < 8);
+                    memcpy(t.x_flat + (8 * int_reg), mem, size_of(type));
+                    int_reg += alignat(size_of(type), 8) / 8;
                 } },
             type.inner);
     }

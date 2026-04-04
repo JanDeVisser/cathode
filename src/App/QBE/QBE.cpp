@@ -82,7 +82,7 @@ intptr_t raw_assign(ILValue const &lhs, ILValue const &rhs, T const &descr, QBEC
             rhs,
             lhs,
         });
-    return size_of(lhs.type);
+    return size_of(rhs.type);
 }
 
 template<>
@@ -108,7 +108,7 @@ intptr_t raw_assign(ILValue const &lhs, ILValue const &rhs, StructType const &st
                         ctx.add_operation(
                             ExprDef {
                                 prev_lhs,
-                                ILValue::integer(alignat(prev_size, align_of(value.type)), ILBaseType::L),
+                                ILValue::integer(alignat(prev_size, fld.type->align_of()), ILBaseType::L),
                                 ILOperation::Add,
                                 lhs_ptr,
                             });

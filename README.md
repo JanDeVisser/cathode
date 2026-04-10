@@ -14,10 +14,13 @@ You need
 adjust the minimum required version on the first line of `CMakeLists.txt`.
 - `gcc` 14.2 or newer. Theoretically `clang` should mostly work but making the
 practice hasn't been done yet. On MacOS `gcc` 15 is available from `brew` at
-the time of writing.
-- [QBE](https://c9x.me/compile/). QBE is included in most Linux package managers
-and MacOS `brew`.
-- Python3 for the test runner.
+the time of writing. Fedora 43 comes with `gcc` 15, but unfortunately Ubuntu
+24.04, which is the current LTS, has `gcc` 13. 14 is available in the LTS as
+`gcc-14`.
+- [QBE](https://c9x.me/compile/). QBE is included in Fedora's package manager
+and MacOS `brew`. At the time of writing it is in Debian Stable, but
+unfortunately not in Ubuntu, so you can download a `.deb` from Debian Stable.
+- `python3` for the test runner.
 
 ### Building on Linux
 ```
@@ -29,6 +32,12 @@ and MacOS `brew`.
     $ export LD_LIBRARY_PATH=`pwd`/build/lib:$LD_LIBRARY_PATH
     $ cd test
     $ ./run_tests.py -a
+```
+
+If you need to use a non-standard compiler, specify it using
+`CMAKE_CXX_COMPILER` variable in the `cmake` invocation (`-GNinja` optional):
+```
+    $ cmake -DCMAKE_CXX_COMPILER=gcc-14 -GNinja ..
 ```
 
 ### Building on MacOS

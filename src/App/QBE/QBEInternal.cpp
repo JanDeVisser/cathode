@@ -467,6 +467,14 @@ GenResult variable_decl(ASTNode const &n, std::wstring const &name, pType const 
     return operand;
 }
 
+GenResult global_decl(ASTNode const &n, std::wstring const &name, pType const &type, ASTNode const &init, QBEContext &ctx)
+{
+    auto init_value = TRY_GENERATE(init, ctx);
+    init_value = TRY_DEREFERENCE(init_value, ctx);
+    ctx.add_global(name, type, init_value.get_value());
+    return QBEOperand { n, ILValue::global(name, ILBaseType::L), type };
+}
+
 GenBinExpr make_binexpr(ASTNode const &n, QBEOperand lhs, Operator op, QBEOperand rhs, QBEContext &ctx)
 {
     pType const &lhs_type = lhs.ptype;

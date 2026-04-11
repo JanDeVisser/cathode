@@ -272,6 +272,7 @@ struct ILValue {
     };
 
     using ILValueInner = std::variant<
+        std::monostate,
         Local,
         Global,
         Temporary,
@@ -387,7 +388,13 @@ struct ILValue {
 
     static ILValue null()
     {
-        return { ILType { }, 0 };
+        return { ILType { }, std::monostate { } };
+    }
+
+    template<typename TypeDesc>
+    static ILValue dummy(TypeDesc td)
+    {
+        return { ILType { std::move(td) }, std::monostate { } };
     }
 
     ILType       type { ILBaseType::V };
@@ -591,7 +598,7 @@ struct ILBinding {
     std::wstring name;
     pType        type;
     int          index;
-    ILType       il_type;
+    ILValue      value;
 };
 
 struct ILParameter {
@@ -625,7 +632,7 @@ struct ILFunction {
     std::vector<size_t>        labels { };
 
     ILFunction(ILFile &file, std::wstring name, pType return_type, bool exported);
-    ILBinding const      &add(std::wstring_view name, pType const &type);
+    ILBinding const      &add(std::wstring_view name, pType type);
     ILParameter const    &add_parameter(std::wstring_view name, pType const &type);
     ILTemporary const    &add_temporary(pType const &type, ILType il_type);
     friend std::wostream &operator<<(std::wostream &os, ILFunction const &function);
@@ -639,10 +646,10 @@ struct ILFile {
     std::vector<std::wstring> strings;
     std::vector<std::string>  cstrings;
     std::vector<ILFunction>   functions;
-    ILBindings                variables { };
+    ILBindings                globals { };
     bool                      has_exports { false };
     bool                      has_main { false };
-    ILBinding const          &add(std::wstring_view name, pType const &type);
+    ILBinding const          &add(std::wstring_view name, pType type, ILValue init);
     friend std::wostream     &operator<<(std::wostream &os, ILFunction const &function);
 };
 
@@ -779,12 +786,17 @@ struct QBEContext {
     ILValue            add_enumeration(pType const &enum_type);
     ILType             qbe_type(pType const &type);
     void               add_operation(ILInstructionImpl impl);
-    ILBinding const   &add(std::wstring_view name, pType const &type);
+    ILBinding const   &add_global(std::wstring_view name, pType type, ILValue init);
+    ILBinding const   &add(std::wstring_view name, pType type);
     ILParameter const &add_parameter(std::wstring_view name, pType const &type);
     ILTemporary const &add_temporary(pType const &type);
     void               push();
     void               pop();
     ILFunction        &function();
+    ILFunction const  &function() const;
+    ILFile            &file();
+    ILFile const      &file() const;
+    bool               in_global_scope() const;
 };
 
 struct Frame {

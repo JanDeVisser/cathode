@@ -118,11 +118,15 @@ add_library(
     src/App/QBE/Context.cpp
     src/App/QBE/Execute.cpp
     src/App/QBE/Expr.cpp
-    src/App/QBE/IL.cpp
+    src/App/QBE/File.cpp
+    src/App/QBE/Function.cpp
+    src/App/QBE/Instruction.cpp
     src/App/QBE/Native.cpp
     src/App/QBE/Operator.cpp
     src/App/QBE/QBE.cpp
     src/App/QBE/QBEInternal.cpp
+    src/App/QBE/Type.cpp
+    src/App/QBE/Value.cpp
 )
 
 target_link_libraries(

@@ -5,12 +5,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "App/Type.h"
 #include <ranges>
 #include <sstream>
 
 #include <App/Parser.h>
 #include <App/QBE/QBE.h>
+#include <App/Type.h>
 
 namespace Lia::QBE {
 
@@ -106,7 +106,7 @@ void QBEContext::add_operation(ILInstructionImpl impl)
     }
     if (std::holds_alternative<LabelDef>(impl)) {
         auto const &label_def = std::get<LabelDef>(impl);
-        if (function.labels.size() < label_def.label + 1) {
+        if (function.labels.size() < static_cast<size_t>(label_def.label + 1)) {
             function.labels.resize(label_def.label + 1);
         }
         function.labels[label_def.label] = function.instructions.size();
@@ -140,12 +140,15 @@ ILFunction &QBEContext::add_function(std::wstring name, pType return_type)
     return function;
 }
 
-ILBinding const &QBEContext::add(std::wstring_view name, pType const &type)
+ILBinding const &QBEContext::add(std::wstring_view name, pType type)
 {
-    if (program.files[current_file].functions.size() > current_function) {
-        return function().add(name, type);
-    }
-    return program.files[current_file].add(name, type);
+    assert(!in_global_scope());
+    return function().add(name, std::move(type));
+}
+
+ILBinding const &QBEContext::add_global(std::wstring_view name, pType type, ILValue init)
+{
+    return file().add(name, std::move(type), std::move(init));
 }
 
 ILParameter const &QBEContext::add_parameter(std::wstring_view name, pType const &type)
@@ -160,7 +163,26 @@ ILTemporary const &QBEContext::add_temporary(pType const &type)
 
 ILFunction &QBEContext::function()
 {
-    return program.files[current_file].functions[current_function];
+    return file().functions[current_function];
 }
 
+ILFunction const &QBEContext::function() const
+{
+    return file().functions[current_function];
+}
+
+ILFile &QBEContext::file()
+{
+    return program.files[current_file];
+}
+
+ILFile const &QBEContext::file() const
+{
+    return program.files[current_file];
+}
+
+bool QBEContext::in_global_scope() const
+{
+    return current_function > file().functions.size();
+}
 }

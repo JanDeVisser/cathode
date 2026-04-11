@@ -28,5 +28,6 @@
   "27_tagged_union_or",
   "28_import_main",
   "29_const_struct_var",
-  "30_void_func"
+  "30_void_func",
+  "31_global_struct_var"
 ]

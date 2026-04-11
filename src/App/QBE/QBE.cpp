@@ -36,6 +36,7 @@ namespace Lia::QBE {
 GenResult  assign(QBEOperand const &lhs, ASTNode const &rhs, QBEContext &ctx);
 GenResult  cast(QBEOperand value, pType const &target_type, QBEContext &ctx);
 GenResult  variable_decl(ASTNode const &n, std::wstring const &name, pType const &type, ASTNode const &init, QBEContext &ctx);
+GenResult  global_decl(ASTNode const &n, std::wstring const &name, pType const &type, ASTNode const &init, QBEContext &ctx);
 GenBinExpr make_binexpr(ASTNode const &n, QBEOperand lhs, Operator op, QBEOperand rhs, QBEContext &ctx);
 
 GenResult generate_qbe_nodes(ASTNodes const &nodes, QBEContext &ctx)
@@ -492,6 +493,11 @@ GenResult generate_qbe_node(ASTNode const &n, Identifier const &impl, QBEContext
             return QBEOperand { n, ILValue::variable(binding.index, t) };
         }
     }
+    for (auto const &binding : ctx.file().globals) {
+        if (binding.name == impl.identifier) {
+            return QBEOperand { n, ILValue::global(binding.name, t) };
+        }
+    }
     fatal(L"Could not find variable `{}`", impl.identifier);
 }
 
@@ -664,6 +670,9 @@ template<>
 GenResult generate_qbe_node(ASTNode const &n, VariableDeclaration const &impl, QBEContext &ctx)
 {
     if (!is_constant(n)) {
+        if (ctx.in_global_scope()) {
+            return global_decl(n, impl.name, n->bound_type, impl.initializer, ctx);
+        }
         return variable_decl(n, impl.name, n->bound_type, impl.initializer, ctx);
     }
     return QBEOperand { n, ILValue::null() };

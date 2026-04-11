@@ -1,0 +1,13 @@
+struct X {
+    x: i64,
+    y: i64,
+}
+
+XX: X = { 69, 420 }
+
+export func main() i32 {
+    XX.x = 42
+    putint(XX.x) puts(" ") putint(XX.y) endln()
+    return 0::i32
+}
+

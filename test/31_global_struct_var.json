@@ -1,0 +1,11 @@
+{
+  "name": "31_global_struct_var",
+  "comptime_stdout": [],
+  "comptime_stderr": [],
+  "stdout": [
+    "42 420"
+  ],
+  "stderr": [],
+  "exit": 0,
+  "args": []
+}

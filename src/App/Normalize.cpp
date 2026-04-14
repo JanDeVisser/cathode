@@ -325,6 +325,7 @@ ASTNode normalize(ASTNode n, FunctionDefinition const &impl)
 template<>
 ASTNode normalize(ASTNode n, IfStatement const &impl)
 {
+    n->init_namespace();
     return make_node<IfStatement>(
         n,
         normalize(impl.condition),
@@ -406,6 +407,7 @@ ASTNode normalize(ASTNode n, Include const &impl)
 template<>
 ASTNode normalize(ASTNode n, LoopStatement const &impl)
 {
+    n->init_namespace();
     return make_node<LoopStatement>(n, impl.label, normalize(impl.statement));
 }
 
@@ -592,6 +594,7 @@ ASTNode normalize(ASTNode n, VariableDeclaration const &impl)
 template<>
 ASTNode normalize(ASTNode n, WhileStatement const &impl)
 {
+    n->init_namespace();
     return make_node<WhileStatement>(n, impl.label, normalize(impl.condition), normalize(impl.statement));
 }
 

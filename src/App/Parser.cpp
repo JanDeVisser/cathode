@@ -1571,19 +1571,17 @@ ASTNode Parser::parse_include()
 
 ASTNode Parser::parse_loop()
 {
-    Label         label;
-    TokenLocation location;
+    Label label;
+    auto  loop_token = lexer.peek();
+    assert(loop_token.matches_keyword(LiaKeyword::Loop));
+    auto location = loop_token.location;
     if (lexer.has_lookback(1)
         && lexer.lookback(0).matches_symbol(':')
         && lexer.lookback(1).matches(TokenKind::Identifier)) {
         label = text_of(lexer.lookback(1));
         location = lexer.lookback(1).location;
     }
-    auto loop_token = lexer.lex();
-    assert(loop_token.matches_keyword(LiaKeyword::Loop));
-    if (!label.has_value()) {
-        location = loop_token.location;
-    }
+    lexer.lex();
     auto stmt = parse_statement();
     if (stmt == nullptr) {
         append(loop_token, "Error parsing `loop` block");

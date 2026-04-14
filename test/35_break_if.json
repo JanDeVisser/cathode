@@ -1,0 +1,20 @@
+{
+  "name": "35_break_if",
+  "comptime_stdout": [],
+  "comptime_stderr": [],
+  "stdout": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7 > 5 and odd",
+    "8",
+    "9 > 5 and odd"
+  ],
+  "stderr": [],
+  "exit": 0,
+  "args": []
+}

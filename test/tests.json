@@ -30,5 +30,8 @@
   "29_const_struct_var",
   "30_void_func",
   "31_global_struct_var",
-  "32_break"
+  "32_break",
+  "33_loop",
+  "34_break_while",
+  "35_break_if"
 ]

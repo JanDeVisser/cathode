@@ -1,0 +1,17 @@
+{
+  "name": "33_loop",
+  "comptime_stdout": [],
+  "comptime_stderr": [],
+  "stdout": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+  ],
+  "stderr": [],
+  "exit": 0,
+  "args": []
+}

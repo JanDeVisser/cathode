@@ -232,9 +232,10 @@ struct BinaryExpression {
 
 struct Block {
     ASTNodes statements;
+    Label    label;
 
     Block() = default;
-    Block(ASTNodes statements);
+    Block(ASTNodes statements, Label label = { });
 };
 
 struct BoolConstant {
@@ -244,9 +245,10 @@ struct BoolConstant {
 };
 
 struct Break {
-    Label label;
+    Label   label;
+    ASTNode block;
 
-    explicit Break(Label label);
+    explicit Break(Label label, ASTNode block = nullptr);
 };
 
 struct Call {
@@ -343,8 +345,9 @@ struct ForStatement {
     std::wstring range_variable;
     ASTNode      range_expr;
     ASTNode      statement;
+    Label        label;
 
-    ForStatement(std::wstring var, ASTNode expr, ASTNode statement);
+    ForStatement(std::wstring var, ASTNode expr, ASTNode statement, Label label = { });
 };
 
 struct FunctionDeclaration {
@@ -412,8 +415,9 @@ struct IfStatement {
     ASTNode condition;
     ASTNode if_branch;
     ASTNode else_branch;
+    Label   label;
 
-    IfStatement(ASTNode condition, ASTNode if_branch, ASTNode else_branch);
+    IfStatement(ASTNode condition, ASTNode if_branch, ASTNode else_branch, Label label = { });
 };
 
 struct Import {
@@ -588,7 +592,7 @@ struct TagValue {
 
 struct TypeNameNode {
     Strings  name;
-    ASTNodes arguments {};
+    ASTNodes arguments { };
 };
 
 struct ReferenceDescriptionNode {
@@ -670,7 +674,7 @@ struct UnaryExpression {
 
 struct VariableDeclaration {
     std::wstring name;
-    ASTNode      type_name {};
+    ASTNode      type_name { };
     ASTNode      initializer;
     bool         is_const;
     Visibility   visibility { Visibility::Static };
@@ -711,6 +715,18 @@ concept Constant = std::is_same_v<N, Number>
     || std::is_same_v<N, Void>;
 
 bool is_constant(ASTNode const &n);
+
+template<typename N>
+concept Breakable = std::is_same_v<N, Block>
+    || std::is_same_v<N, IfStatement>
+    || std::is_same_v<N, ForStatement>
+    || std::is_same_v<N, LoopStatement>
+    || std::is_same_v<N, WhileStatement>;
+
+template<typename N>
+concept Continuable = std::is_same_v<N, ForStatement>
+    || std::is_same_v<N, LoopStatement>
+    || std::is_same_v<N, WhileStatement>;
 
 using SyntaxNode = std::variant<Dummy,
     Alias,
@@ -764,10 +780,10 @@ using SyntaxNode = std::variant<Dummy,
 
 struct ASTNodeImpl {
     using NodeTag = std::variant<bool, int64_t, std::wstring, pType, ASTNode>;
-    TokenLocation location {};
+    TokenLocation location { };
     ASTStatus     status { ASTStatus::Initialized };
-    SyntaxNode    node {};
-    pType         bound_type {};
+    SyntaxNode    node { };
+    pType         bound_type { };
     NSNode        ns { nullptr };
     ASTNode       id;
     ASTNode       supercedes;

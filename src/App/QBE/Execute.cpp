@@ -39,7 +39,7 @@ QBEValue Frame::make_from_buffer(ILValue target, QBEValue val)
     void const *buffer = static_cast<void const *>(val);
     return std::visit(
         overloads {
-            [this, &buffer](ILBaseType const &bt) -> QBEValue {
+            [&buffer](ILBaseType const &bt) -> QBEValue {
                 switch (bt) {
                 case ILBaseType::V:
                     return QBEValue { };
@@ -148,14 +148,18 @@ void assign(pFrame const &frame, ILValue const &val_ref, QBEValue const &v)
         overloads {
             [frame, &v](ILValue::Local const &local) {
                 trace(L"Set local {} = {}", local.var, v);
-                if (frame->locals.size() < local.var + 1) {
+                if (frame->locals.size() < static_cast<size_t>(local.var + 1)) {
                     frame->locals.resize(local.var + 1);
                 }
                 frame->locals[local.var] = v;
             },
+            [frame, &v](ILValue::Global const &global) {
+                trace(L"Set global {} = {}", global.name, v);
+                frame->vm.globals[frame->file.id][global.name] = v;
+            },
             [frame, &v](ILValue::Temporary const &temp) {
                 trace(L"Set temp {} = {}", temp.index, v);
-                if (frame->temporaries.size() < temp.index + 1) {
+                if (frame->temporaries.size() < static_cast<size_t>(temp.index + 1)) {
                     frame->temporaries.resize(temp.index + 1);
                 }
                 frame->temporaries[temp.index] = v;
@@ -181,7 +185,7 @@ QBEValue get(pFrame const &frame, ILValue const &val_ref)
     auto ret = std::visit(
         overloads {
             [&frame](ILValue::Local const &local) -> QBEValue {
-                if (frame->locals.size() < local.var + 1) {
+                if (frame->locals.size() < static_cast<size_t>(local.var + 1)) {
                     fatal("No local value with id `{}`in frame", local.var);
                 }
                 trace(L"Get local {} = {:x}", local.var, frame->locals[local.var]);
@@ -288,58 +292,18 @@ void store(pFrame const &frame, QBEValue target, ILValue const &src_ref)
             src_ptr = reinterpret_cast<uint8_t *>(&f64);
             break;
         default:
-            break;
+            UNREACHABLE();
         }
         memset(target_ptr, 0, size_of(val.type));
         memcpy(target_ptr, src_ptr, size_of(val.type));
     };
 
-    auto dereference_value = [](uint8_t const *ptr, ILBaseType type) -> QBEValue {
-        QBEValue ret;
-        ret.type = type;
-        switch (type) {
-        case ILBaseType::B:
-        case ILBaseType::SB:
-            ret.payload = static_cast<intptr_t>(*(reinterpret_cast<int8_t const *>(ptr)));
-            break;
-        case ILBaseType::UB:
-            ret.payload = static_cast<intptr_t>(*ptr);
-            break;
-        case ILBaseType::H:
-        case ILBaseType::SH:
-            ret.payload = static_cast<intptr_t>(*(reinterpret_cast<int16_t const *>(ptr)));
-            break;
-        case ILBaseType::UH:
-            ret.payload = static_cast<intptr_t>(*(reinterpret_cast<uint16_t const *>(ptr)));
-            break;
-        case ILBaseType::W:
-        case ILBaseType::SW:
-            ret.payload = static_cast<intptr_t>(*(reinterpret_cast<int32_t const *>(ptr)));
-            break;
-        case ILBaseType::UW:
-            ret.payload = static_cast<intptr_t>(*(reinterpret_cast<uint32_t const *>(ptr)));
-            break;
-        case ILBaseType::L:
-            ret.payload = static_cast<intptr_t>(*(reinterpret_cast<int64_t const *>(ptr)));
-            break;
-        case ILBaseType::S:
-            ret.payload = static_cast<double>(*(reinterpret_cast<float const *>(ptr)));
-            break;
-        case ILBaseType::D:
-            ret.payload = *(reinterpret_cast<double const *>(ptr));
-            break;
-        default:
-            break;
-        }
-        return ret;
-    };
-
     std::visit(
         overloads {
-            [&store_value, &src, &ptr](ILBaseType const &bt) {
+            [&store_value, &src, &ptr](ILBaseType const &) {
                 store_value(src, ptr);
             },
-            [&store_value, &dereference_value, &src, &ptr](ILType::ILAggregate const &aggregate) {
+            [&src, &ptr](ILType::ILAggregate const &aggregate) {
                 auto *src_ptr = static_cast<uint8_t *>(src);
                 memset(ptr, 0, aggregate.size_of);
                 memcpy(ptr, src_ptr, aggregate.size_of);
@@ -387,8 +351,16 @@ Frame &VM::operator[](size_t ix)
 void VM::dump_stack() const
 {
     trace("  Stack SP = 0x{:04x} Base = 0x{:016x}", stack_pointer, reinterpret_cast<intptr_t>(stack.data()));
-    for (auto ix = 0; ix < stack_pointer; ix += sizeof(uint64_t)) {
+    for (size_t ix = 0; ix < stack_pointer; ix += sizeof(uint64_t)) {
         trace("    0x{:02x}: 0x{:016x}", ix, *reinterpret_cast<uint64_t const *>(&stack[ix]));
+    }
+}
+
+void VM::dump_globals() const
+{
+    trace("  Globals GP = 0x{:04x} Base = 0x{:016x}", data_pointer, reinterpret_cast<intptr_t>(data.data()));
+    for (size_t ix = 0; ix < data_pointer; ix += sizeof(uint64_t)) {
+        trace("    0x{:02x}: 0x{:016x}", ix, *reinterpret_cast<uint64_t const *>(&data[ix]));
     }
 }
 
@@ -407,6 +379,7 @@ void Frame::dump_frame() const
         trace(L"    {}: {:tx}", ix, l);
     }
     vm.dump_stack();
+    vm.dump_globals();
 }
 
 struct ExecError {
@@ -417,13 +390,13 @@ using ExecTermination = std::variant<QBEValue, ExecError>;
 using ExecResult = std::expected<ILValue, ExecTermination>;
 
 template<typename InstrDef>
-ExecResult execute(ILFunction const &il, pFrame const &frame, InstrDef const &instruction)
+ExecResult execute(ILFunction const &, pFrame const &, InstrDef const &)
 {
     NYI("Unimplemented execute() for {}", typeid(InstrDef).name());
 }
 
 template<>
-ExecResult execute(ILFunction const &il, pFrame const &frame, AllocDef const &instruction)
+ExecResult execute(ILFunction const &, pFrame const &frame, AllocDef const &instruction)
 {
     auto ptr { frame->allocate(instruction.bytes, instruction.alignment) };
     assign(frame, instruction.target, ptr);
@@ -432,7 +405,7 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, AllocDef const &in
 }
 
 template<>
-ExecResult execute(ILFunction const &il, pFrame const &frame, BlitDef const &instruction)
+ExecResult execute(ILFunction const &, pFrame const &frame, BlitDef const &instruction)
 {
     assert(is_pointer(instruction.src));
     assert(is_pointer(instruction.dest));
@@ -446,7 +419,7 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, BlitDef const &ins
     return instruction.dest;
 }
 
-ExecResult native_call(ILFunction const &il, pFrame const &frame, CallDef const &instruction)
+ExecResult native_call(ILFunction const &, pFrame const &frame, CallDef const &instruction)
 {
     intptr_t            depth { 0 };
     std::vector<ILType> types;
@@ -522,7 +495,7 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, CallDef const &ins
 }
 
 template<>
-ExecResult execute(ILFunction const &il, pFrame const &frame, CopyDef const &instruction)
+ExecResult execute(ILFunction const &, pFrame const &frame, CopyDef const &instruction)
 {
     assign(frame, instruction.target, get(frame, instruction.expr));
     ++frame->ip;
@@ -530,21 +503,21 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, CopyDef const &ins
 }
 
 template<>
-ExecResult execute(ILFunction const &il, pFrame const &frame, DbgFile const &instruction)
+ExecResult execute(ILFunction const &, pFrame const &frame, DbgFile const &)
 {
     ++frame->ip;
     return { };
 }
 
 template<>
-ExecResult execute(ILFunction const &il, pFrame const &frame, DbgLoc const &instruction)
+ExecResult execute(ILFunction const &, pFrame const &frame, DbgLoc const &)
 {
     ++frame->ip;
     return { };
 }
 
 template<>
-ExecResult execute(ILFunction const &il, pFrame const &frame, ExprDef const &instruction)
+ExecResult execute(ILFunction const &, pFrame const &frame, ExprDef const &instruction)
 {
     auto lhs = get(frame, instruction.lhs);
     auto rhs = get(frame, instruction.rhs);
@@ -568,7 +541,7 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, ExprDef const &ins
 }
 
 template<>
-ExecResult execute(ILFunction const &il, pFrame const &frame, ExtDef const &instruction)
+ExecResult execute(ILFunction const &, pFrame const &frame, ExtDef const &instruction)
 {
     auto src = get(frame, instruction.source);
     assert(std::holds_alternative<ILBaseType>(instruction.target.type.inner));
@@ -611,29 +584,37 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, ExtDef const &inst
 template<>
 ExecResult execute(ILFunction const &il, pFrame const &frame, JmpDef const &instruction)
 {
-    frame->ip = il.labels[instruction.label];
+    for (auto const &[l, ip] : il.labels) {
+        std::wcerr << l << ' ' << ip << '\n';
+    }
+    std::wcerr << "label : " << instruction.label << '\n';
+    frame->ip = il.labels.at(instruction.label);
     return { };
 }
 
 template<>
 ExecResult execute(ILFunction const &il, pFrame const &frame, JnzDef const &instruction)
 {
+    // for (auto const &[l, ip] : il.labels) {
+    //     std::wcerr << l << ' ' << ip << '\n';
+    // }
+    // std::wcerr << "on_true : " << instruction.on_true << " on_false : " << instruction.on_false << '\n';
     auto expr = get(frame, instruction.expr);
     frame->ip = (static_cast<bool>(expr))
-        ? il.labels[instruction.on_true]
-        : il.labels[instruction.on_false];
+        ? il.labels.at(instruction.on_true)
+        : il.labels.at(instruction.on_false);
     return { };
 }
 
 template<>
-ExecResult execute(ILFunction const &il, pFrame const &frame, LabelDef const &instruction)
+ExecResult execute(ILFunction const &, pFrame const &frame, LabelDef const &)
 {
     ++frame->ip;
     return { };
 }
 
 template<>
-ExecResult execute(ILFunction const &il, pFrame const &frame, LoadDef const &instruction)
+ExecResult execute(ILFunction const &, pFrame const &frame, LoadDef const &instruction)
 {
     auto src = get(frame, instruction.pointer);
     trace(L"Load value {:t} into {:t}", src, instruction.target);
@@ -643,7 +624,7 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, LoadDef const &ins
 }
 
 template<>
-ExecResult execute(ILFunction const &il, pFrame const &frame, RetDef const &instruction)
+ExecResult execute(ILFunction const &, pFrame const &frame, RetDef const &instruction)
 {
     if (instruction.expr) {
         auto retval { instruction.expr.value() };
@@ -653,7 +634,7 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, RetDef const &inst
 }
 
 template<>
-ExecResult execute(ILFunction const &il, pFrame const &frame, StoreDef const &instruction)
+ExecResult execute(ILFunction const &, pFrame const &frame, StoreDef const &instruction)
 {
     auto target = get(frame, instruction.target);
     store(frame, target, instruction.expr);
@@ -688,6 +669,19 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
         frame->arguments[ix] = arg;
     }
     trace("  Global Base  = 0x{:016x}", reinterpret_cast<intptr_t>(vm.data.data()));
+    for (auto const &[ix, global] : std::ranges::views::enumerate(file.globals)) {
+        if (!vm.globals[file.id].contains(global.name)) {
+            assert((vm.data_pointer + global.type->size_of()) <= VM::STACK_SIZE);
+            QBEValue val { vm.data.data() + vm.data_pointer };
+            trace(L"Set global {:02d}. {:20s}: 0x{:04x}:0x{:04x} ptr 0x{:016x}", ix, global.name, file.id, vm.data_pointer, reinterpret_cast<intptr_t>(vm.data.data() + vm.data_pointer));
+            for (auto ix = 0; ix < global.type->size_of(); ++ix) {
+                *(vm.data.data() + vm.data_pointer) = 0;
+                ++vm.data_pointer;
+            }
+            global.store(static_cast<uint8_t *>(val));
+            vm.globals[file.id][global.name] = val;
+        }
+    }
     for (auto const &[ix, s] : std::ranges::views::enumerate(file.strings)) {
         auto n { std::format(L"str_{}", ix) };
         if (!vm.globals[file.id].contains(n)) {

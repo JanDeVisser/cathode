@@ -1,0 +1,13 @@
+
+export func main() i32
+{
+    blk: for x in 0..10 {
+        putint(x)
+        if (x > 5) {
+            break :blk
+        }
+        endln()
+    }
+    return 0::i32
+}
+

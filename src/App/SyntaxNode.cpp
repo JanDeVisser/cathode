@@ -136,8 +136,9 @@ ArgumentList::ArgumentList(ASTNodes arguments)
 {
 }
 
-Block::Block(ASTNodes statements)
+Block::Block(ASTNodes statements, Label label)
     : statements(std::move(statements))
+    , label(std::move(label))
 {
 }
 
@@ -156,6 +157,7 @@ BoolConstant::BoolConstant(bool value)
     : value(value)
 {
 }
+
 Decimal::Decimal(std::wstring_view whole, std::wstring_view fraction, std::wstring_view exponent)
 {
     std::string s = as_utf8(whole);
@@ -302,10 +304,11 @@ Call::Call(ASTNode callable, ASTNode args)
     assert(this->arguments != nullptr);
 }
 
-IfStatement::IfStatement(ASTNode condition, ASTNode if_branch, ASTNode else_branch)
+IfStatement::IfStatement(ASTNode condition, ASTNode if_branch, ASTNode else_branch, Label label)
     : condition(condition)
     , if_branch(if_branch)
     , else_branch(else_branch)
+    , label(std::move(label))
 {
     assert(condition != nullptr && if_branch != nullptr);
 }
@@ -320,10 +323,11 @@ Include::Include(std::wstring_view file_name)
 {
 }
 
-ForStatement::ForStatement(std::wstring var, ASTNode expr, ASTNode statement)
+ForStatement::ForStatement(std::wstring var, ASTNode expr, ASTNode statement, Label label)
     : range_variable(std::move(var))
     , range_expr(std::move(expr))
     , statement(statement)
+    , label(std::move(label))
 {
     assert(this->range_expr != nullptr);
     assert(this->statement != nullptr);
@@ -382,8 +386,9 @@ PublicDeclaration::PublicDeclaration(std::wstring name, ASTNode declaration)
     assert(this->declaration != nullptr);
 }
 
-Break::Break(Label label)
+Break::Break(Label label, ASTNode block)
     : label(std::move(label))
+    , block(std::move(block))
 {
 }
 

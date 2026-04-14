@@ -249,15 +249,15 @@ struct ILValue {
     using ILValues = std::vector<ILValue>;
 
     struct Local {
-        int var;
+        size_t var;
     };
 
     struct Variable {
-        int index;
+        size_t index;
     };
 
     struct Parameter {
-        int index;
+        size_t index;
     };
 
     struct ReturnValue {
@@ -268,7 +268,7 @@ struct ILValue {
     };
 
     struct Temporary {
-        int index;
+        size_t index;
     };
 
     using ILValueInner = std::variant<
@@ -309,13 +309,13 @@ struct ILValue {
     }
 
     template<typename TypeDesc>
-    static ILValue local(int var, TypeDesc td)
+    static ILValue local(size_t var, TypeDesc td)
     {
         ILType t { std::move(td) };
         return { t, Local { var } };
     }
 
-    static ILValue pointer(int ptr)
+    static ILValue pointer(size_t ptr)
     {
         return { ILType { ILBaseType::L }, Local { ptr } };
     }
@@ -333,29 +333,29 @@ struct ILValue {
     }
 
     template<typename TypeDesc>
-    static ILValue temporary(int index, TypeDesc td)
+    static ILValue temporary(size_t index, TypeDesc td)
     {
         return { ILType { std::move(td) }, Temporary { index } };
     }
 
     template<typename TypeDesc>
-    static ILValue variable(int index, TypeDesc td)
+    static ILValue variable(size_t index, TypeDesc td)
     {
         return { ILType { std::move(td) }, Variable { index } };
     }
 
     template<typename TypeDesc>
-    static ILValue parameter(int index, TypeDesc td)
+    static ILValue parameter(size_t index, TypeDesc td)
     {
         return { ILType { std::move(td) }, Parameter { index } };
     }
 
-    static ILValue string(int str_id)
+    static ILValue string(size_t str_id)
     {
         return global(std::format(L"str_{}", str_id), ILBaseType::L);
     }
 
-    static ILValue cstring(int str_id)
+    static ILValue cstring(size_t str_id)
     {
         return global(std::format(L"cstr_{}", str_id), ILBaseType::L);
     }
@@ -405,6 +405,37 @@ using ILValues = ILValue::ILValues;
 
 std::wostream &operator<<(std::wostream &os, ILValue const &value);
 std::wostream &operator<<(std::wostream &os, ILOperation const &op);
+
+enum class LabelType {
+    Begin,
+    Top,
+    Else,
+    End,
+};
+
+struct QBELabel {
+    LabelType type;
+    ASTNode   node;
+
+    QBELabel(LabelType type, ASTNode const &node)
+        : type(type)
+        , node(node)
+    {
+    }
+
+    bool operator<(QBELabel const &other) const
+    {
+        if (node == other.node) {
+            return static_cast<int>(type) < static_cast<int>(other.type);
+        }
+        return node < other.node;
+    }
+
+    bool operator==(QBELabel const &) const = default;
+};
+
+std::wostream &operator<<(std::wostream &os, LabelType t);
+std::wostream &operator<<(std::wostream &os, QBELabel const &label);
 
 struct AllocDef {
     size_t  alignment;
@@ -479,21 +510,41 @@ struct HltDef {
 };
 
 struct JmpDef {
-    int label;
+    QBELabel label;
+
+    JmpDef(LabelType type, ASTNode const &node)
+        : label({ type, node })
+    {
+    }
+
+    JmpDef(QBELabel label)
+        : label(std::move(label))
+    {
+    }
 
     friend std::wostream &operator<<(std::wostream &os, JmpDef const &impl);
 };
 
 struct JnzDef {
-    ILValue expr;
-    int     on_true;
-    int     on_false;
+    ILValue  expr;
+    QBELabel on_true;
+    QBELabel on_false;
 
     friend std::wostream &operator<<(std::wostream &os, JnzDef const &impl);
 };
 
 struct LabelDef {
-    int label;
+    QBELabel label;
+
+    LabelDef(LabelType type, ASTNode const &node)
+        : label({ type, node })
+    {
+    }
+
+    LabelDef(QBELabel label)
+        : label(std::move(label))
+    {
+    }
 
     friend std::wostream &operator<<(std::wostream &os, LabelDef const &impl);
 };
@@ -599,6 +650,8 @@ struct ILBinding {
     pType        type;
     int          index;
     ILValue      value;
+
+    void store(uint8_t *destination) const;
 };
 
 struct ILParameter {
@@ -629,7 +682,7 @@ struct ILFunction {
     ILBindings                 variables { };
     std::vector<ILTemporary>   temps { };
     std::vector<ILInstruction> instructions { };
-    std::vector<size_t>        labels { };
+    std::map<QBELabel, size_t> labels { };
 
     ILFunction(ILFile &file, std::wstring name, pType return_type, bool exported);
     ILBinding const      &add(std::wstring_view name, pType type);
@@ -771,9 +824,8 @@ using ILVariables = std::vector<QBEValue>;
 using ILNamedVariables = std ::map<std::wstring, QBEValue>;
 
 struct QBEContext {
-    int       next_label;
-    int       next_var;
-    int       next_literal;
+    size_t    next_var;
+    size_t    next_literal;
     fs::path  file_name;
     bool      is_export { false };
     ILProgram program { };
@@ -797,6 +849,18 @@ struct QBEContext {
     ILFile            &file();
     ILFile const      &file() const;
     bool               in_global_scope() const;
+
+    QBEContext &operator+=(ILInstructionImpl instruction)
+    {
+        add_operation(std::move(instruction));
+        return *this;
+    }
+
+    QBEContext &operator,(ILInstructionImpl instruction)
+    {
+        add_operation(std::move(instruction));
+        return *this;
+    }
 };
 
 struct Frame {
@@ -840,6 +904,7 @@ struct VM {
     QBEValue     allocate(ILType const &type);
     void         release(QBEValue ptr);
     void         dump_stack() const;
+    void         dump_globals() const;
 };
 
 using ExecutionResult = std::expected<QBEValue, std::wstring>;

@@ -5,12 +5,11 @@
  */
 
 #include <ranges>
-#include <sstream>
+#include <variant>
 
 #include <App/Parser.h>
 #include <App/QBE/QBE.h>
 #include <App/Type.h>
-#include <variant>
 
 namespace Lia::QBE {
 

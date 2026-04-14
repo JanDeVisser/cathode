@@ -115,17 +115,21 @@ GenResult generate_qbe_node(ASTNode const &n, Block const &impl, QBEContext &ctx
     if (ctx.current_function >= file.functions.size()) {
         ctx.add_function(file.name, n->bound_type);
     }
-    ctx.add_operation(
-        LabelDef {
-            ++ctx.next_label,
-        });
-
+    ctx.add_operation(LabelDef { LabelType::Begin, n });
     for (auto const &s : impl.statements) {
         if (auto res = generate_qbe_node(s, ctx); !res) {
             return res;
         }
     }
+    ctx.add_operation(LabelDef { LabelType::End, n });
     return { };
+}
+
+template<>
+GenResult generate_qbe_node(ASTNode const &n, Break const &impl, QBEContext &ctx)
+{
+    ctx.add_operation(JmpDef { LabelType::End, impl.block });
+    return QBEOperand { n, ILValue::null() };
 }
 
 template<>
@@ -386,9 +390,6 @@ GenResult generate_qbe_node(ASTNode const &n, Extern const &impl, QBEContext &ct
 template<>
 GenResult generate_qbe_node(ASTNode const &n, ForStatement const &impl, QBEContext &ctx)
 {
-    auto        top_loop = ++ctx.next_label;
-    auto        cont_loop = ++ctx.next_label;
-    auto        end_loop = ++ctx.next_label;
     auto const &range = get<BinaryExpression>(impl.range_expr);
     auto const &range_start = range.lhs;
     auto const &range_end = TRY_GENERATE(range.rhs, ctx);
@@ -396,7 +397,7 @@ GenResult generate_qbe_node(ASTNode const &n, ForStatement const &impl, QBEConte
         return std::unexpected(res.error());
     } else {
         auto const &range_var = res.value();
-        ctx.add_operation(LabelDef { top_loop });
+        ctx.add_operation(LabelDef { LabelType::Begin, n });
         auto range_var_value_pre = ILValue::local(++ctx.next_var, qbe_type(range_start->bound_type));
         ctx.add_operation(
             LoadDef {
@@ -414,10 +415,10 @@ GenResult generate_qbe_node(ASTNode const &n, ForStatement const &impl, QBEConte
         ctx.add_operation(
             JnzDef {
                 range_ended,
-                cont_loop,
-                end_loop,
+                QBELabel { LabelType::Top, n },
+                QBELabel { LabelType::End, n },
             });
-        ctx.add_operation(LabelDef { cont_loop });
+        ctx.add_operation(LabelDef { LabelType::Top, n });
         TRY_GENERATE(impl.statement, ctx);
         auto range_var_value_post = ILValue::local(++ctx.next_var, qbe_type(range_start->bound_type));
         ctx.add_operation(
@@ -438,8 +439,8 @@ GenResult generate_qbe_node(ASTNode const &n, ForStatement const &impl, QBEConte
                 range_var_value_inc,
                 range_var.get_value(),
             });
-        ctx.add_operation(JmpDef { top_loop });
-        ctx.add_operation(LabelDef { end_loop });
+        ctx.add_operation(JmpDef { LabelType::Begin, n });
+        ctx.add_operation(LabelDef { LabelType::End, n });
         return QBEOperand { n, ILValue::null() };
     }
 }
@@ -504,13 +505,9 @@ GenResult generate_qbe_node(ASTNode const &n, Identifier const &impl, QBEContext
 template<>
 GenResult generate_qbe_node(ASTNode const &n, IfStatement const &impl, QBEContext &ctx)
 {
-    auto if_block = ++ctx.next_label;
-    auto after_if = ++ctx.next_label;
-    int  else_block = 0;
-    auto cond_false = after_if;
+    LabelType cond_false { LabelType::End };
     if (impl.else_branch != nullptr) {
-        else_block = ++ctx.next_label;
-        cond_false = else_block;
+        cond_false = LabelType::Else;
     }
     auto condition_var = TRY_GENERATE(impl.condition, ctx);
     if (impl.condition->bound_type != TypeRegistry::boolean) {
@@ -523,17 +520,27 @@ GenResult generate_qbe_node(ASTNode const &n, IfStatement const &impl, QBEContex
     ctx.add_operation(
         JnzDef {
             condition_var.get_value(),
-            if_block,
-            cond_false,
+            QBELabel { LabelType::Top, n },
+            QBELabel { cond_false, n },
         });
-    ctx.add_operation(LabelDef { if_block });
+    ctx.add_operation(LabelDef { LabelType::Top, n });
     TRY_GENERATE(impl.if_branch, ctx);
     if (impl.else_branch != nullptr) {
-        ctx.add_operation(JmpDef { after_if });
-        ctx.add_operation(LabelDef { else_block });
+        ctx.add_operation(JmpDef { LabelType::End, n });
+        ctx.add_operation(LabelDef { LabelType::Else, n });
         TRY_GENERATE(impl.else_branch, ctx);
     }
-    ctx.add_operation(LabelDef { after_if });
+    ctx.add_operation(LabelDef { LabelType::End, n });
+    return QBEOperand { n, ILValue::null() };
+}
+
+template<>
+GenResult generate_qbe_node(ASTNode const &n, LoopStatement const &impl, QBEContext &ctx)
+{
+    ctx.add_operation(LabelDef { LabelType::Begin, n });
+    TRY_GENERATE(impl.statement, ctx);
+    ctx.add_operation(JmpDef { LabelType::Begin, n });
+    ctx.add_operation(LabelDef { LabelType::End, n });
     return QBEOperand { n, ILValue::null() };
 }
 
@@ -690,10 +697,7 @@ GenResult generate_qbe_node(ASTNode const &n, UnaryExpression const &impl, QBECo
 template<>
 GenResult generate_qbe_node(ASTNode const &n, WhileStatement const &impl, QBEContext &ctx)
 {
-    auto top_loop = ++ctx.next_label;
-    auto cont_loop = ++ctx.next_label;
-    auto end_loop = ++ctx.next_label;
-    ctx.add_operation(LabelDef { top_loop });
+    ctx.add_operation(LabelDef { LabelType::Begin, n });
     auto condition_var = TRY_GENERATE(impl.condition, ctx);
     if (impl.condition->bound_type != TypeRegistry::boolean) {
         if (auto res = cast(condition_var, TypeRegistry::boolean, ctx); !res.has_value()) {
@@ -705,13 +709,13 @@ GenResult generate_qbe_node(ASTNode const &n, WhileStatement const &impl, QBECon
     ctx.add_operation(
         JnzDef {
             condition_var.get_value(),
-            cont_loop,
-            end_loop,
+            QBELabel { LabelType::Top, n },
+            QBELabel { LabelType::End, n },
         });
-    ctx.add_operation(LabelDef { cont_loop });
+    ctx.add_operation(LabelDef { LabelType::Top, n });
     TRY_GENERATE(impl.statement, ctx);
-    ctx.add_operation(JmpDef { top_loop });
-    ctx.add_operation(LabelDef { end_loop });
+    ctx.add_operation(JmpDef { LabelType::Begin, n });
+    ctx.add_operation(LabelDef { LabelType::End, n });
     return QBEOperand { n, ILValue::null() };
 }
 

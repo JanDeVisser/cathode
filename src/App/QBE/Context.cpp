@@ -106,9 +106,6 @@ void QBEContext::add_operation(ILInstructionImpl impl)
     }
     if (std::holds_alternative<LabelDef>(impl)) {
         auto const &label_def = std::get<LabelDef>(impl);
-        if (function.labels.size() < static_cast<size_t>(label_def.label + 1)) {
-            function.labels.resize(label_def.label + 1);
-        }
         function.labels[label_def.label] = function.instructions.size();
     }
     if (trace_on()) {
@@ -135,7 +132,6 @@ ILFunction &QBEContext::add_function(std::wstring name, pType return_type)
     file.has_exports |= function.exported;
     file.has_main = function.name == L"main";
     next_var = 0;
-    next_label = 0;
     current_function = function.id;
     return function;
 }

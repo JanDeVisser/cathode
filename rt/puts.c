@@ -15,7 +15,7 @@
 static slice_t to_string_int64(slice_t dest, int64_t i, int radix);
 static slice_t to_string_uint64(slice_t dest, uint64_t i, int radix);
 
-size_t lia$fputs(int fd, wchar_t const *ptr, uint64_t len)
+size_t lia$fputs(int fd, wchar_t const *ptr, int64_t len)
 {
     slice_t utf8 = to_utf8((slice_t) { (void *) ptr, len });
     size_t  ret = write(fd, utf8.ptr, utf8.size);
@@ -28,19 +28,19 @@ size_t lia$fendln(int fd)
     return write(fd, "\n", 1);
 }
 
-size_t lia$fputln(int fd, wchar_t const *ptr, uint64_t len)
+size_t lia$fputln(int fd, wchar_t const *ptr, int64_t len)
 {
     size_t ret = lia$fputs(fd, ptr, len);
     ret += lia$fendln(fd);
     return ret;
 }
 
-size_t lia$puts(wchar_t const *ptr, uint64_t len)
+size_t lia$puts(wchar_t const *ptr, int64_t len)
 {
     return lia$fputs(1, ptr, len);
 }
 
-size_t lia$eputs(wchar_t const *ptr, uint64_t len)
+size_t lia$eputs(wchar_t const *ptr, int64_t len)
 {
     return lia$fputs(2, ptr, len);
 }
@@ -50,24 +50,32 @@ size_t lia$endln()
     return lia$fendln(1);
 }
 
-size_t lia$putln(wchar_t const *ptr, uint64_t len)
+size_t lia$putln(wchar_t const *ptr, int64_t len)
 {
     size_t ret = lia$puts(ptr, len);
     ret += lia$endln();
     return ret;
 }
 
-size_t lia$eputln(wchar_t const *ptr, uint64_t len)
+size_t lia$eputln(wchar_t const *ptr, int64_t len)
 {
     size_t ret = lia$eputs(ptr, len);
     ret += lia$fendln(2);
     return ret;
 }
 
-[[noreturn]] void lia$abort(wchar_t const *ptr, uint64_t len)
+[[noreturn]] void lia$abort(wchar_t const *ptr, int64_t len)
 {
     lia$eputln(ptr, len);
+    close(2);
     abort();
+}
+
+void lia$assert(bool assertion, wchar_t const *ptr, int64_t len)
+{
+    if (!assertion) {
+        lia$abort(ptr, len);
+    }
 }
 
 size_t lia$putint(int64_t i)
@@ -130,7 +138,7 @@ slice_t to_string_int64(slice_t dest, int64_t i, int radix)
 
 slice_t to_string_uint64(slice_t dest, uint64_t i, int radix)
 {
-    char   *ptr = dest.ptr + dest.size;
+    char   *ptr = (char *) dest.ptr + dest.size;
     wchar_t digit;
     int64_t num = i;
     int     len = 0;

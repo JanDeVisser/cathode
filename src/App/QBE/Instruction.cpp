@@ -29,6 +29,31 @@ std::wostream &operator<<(std::wostream &os, ILOperation const &op)
     return os;
 }
 
+std::wostream &operator<<(std::wostream &os, LabelType t)
+{
+    switch (t) {
+    case LabelType::Begin:
+        os << L"start";
+        break;
+    case LabelType::Top:
+        os << L"top";
+        break;
+    case LabelType::Else:
+        os << L"else";
+        break;
+    case LabelType::End:
+        os << L"end";
+        break;
+    }
+    return os;
+}
+
+std::wostream &operator<<(std::wostream &os, QBELabel const &label)
+{
+    os << '@' << label.type << '_' << label.node->id.value();
+    return os;
+}
+
 std::wostream &operator<<(std::wostream &os, AllocDef const &impl)
 {
     os << "    " << impl.target << " = l alloc" << impl.alignment << " " << impl.bytes;
@@ -164,19 +189,19 @@ std::wostream &operator<<(std::wostream &os, HltDef const &)
 
 std::wostream &operator<<(std::wostream &os, JmpDef const &impl)
 {
-    os << "    jmp @lbl_" << impl.label;
+    os << "    jmp " << impl.label;
     return os;
 }
 
 std::wostream &operator<<(std::wostream &os, JnzDef const &impl)
 {
-    os << "    jnz " << impl.expr << ", @lbl_" << impl.on_true << ", @lbl_" << impl.on_false;
+    os << "    jnz " << impl.expr << ", " << impl.on_true << ", " << impl.on_false;
     return os;
 }
 
 std::wostream &operator<<(std::wostream &os, LabelDef const &impl)
 {
-    os << "@lbl_" << impl.label;
+    os << impl.label;
     return os;
 }
 
@@ -243,5 +268,4 @@ std::wostream &operator<<(std::wostream &os, VaStartDef const &impl)
     os << "    vastart " << impl.arglist;
     return os;
 }
-
 }

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <ranges>
 #include <string>
 #include <string_view>
 
@@ -151,6 +152,35 @@ ASTNode normalize(ASTNode n, Block const &impl)
     const_cast<ASTNode &>(n)->init_namespace();
     auto ret = make_node<Block>(n, normalize(impl.statements));
     return ret;
+}
+
+template<>
+ASTNode normalize(ASTNode n, Break const &impl)
+{
+    Parser &parser { *(n.repo) };
+    if (parser.namespaces.empty()) {
+        n.error("`break` statement cannot appear at this level");
+        return n;
+    }
+    ASTNode block { nullptr };
+    for (NSNode const &ns : parser.namespaces | std::ranges::views::reverse) {
+        auto matches {
+            std::visit(
+                overloads {
+                    [&impl](Breakable auto const &b) -> bool {
+                        return !impl.label || (impl.label == b.label);
+                    },
+                    [](auto const &) -> bool {
+                        return false;
+                    } },
+                ns->node->node)
+        };
+        if (matches) {
+            return make_node<Break>(n, impl.label, ns->node);
+        }
+    }
+    n.error(L"Block `{}` not found", *impl.label);
+    return n;
 }
 
 template<>

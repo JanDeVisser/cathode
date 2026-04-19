@@ -24,7 +24,7 @@ namespace fs = std::filesystem;
 using namespace std::literals;
 
 template<class N>
-ASTNode normalize(ASTNode n, N const &impl)
+ASTNode normalize(ASTNode n, N const &)
 {
     return n;
 }
@@ -249,7 +249,7 @@ ASTNode normalize(ASTNode n, Enum const &impl)
 }
 
 template<>
-ASTNode normalize(ASTNode n, ExportDeclaration const &impl)
+ASTNode normalize(ASTNode, ExportDeclaration const &impl)
 {
     auto normalized { normalize(impl.declaration) };
     std::visit(
@@ -451,7 +451,7 @@ ASTNode normalize(ASTNode n, Program const &impl)
 }
 
 template<>
-ASTNode normalize(ASTNode n, PublicDeclaration const &impl)
+ASTNode normalize(ASTNode, PublicDeclaration const &impl)
 {
     auto normalized { normalize(impl.declaration) };
     std::visit(
@@ -535,16 +535,19 @@ ASTNode normalize(ASTNode n, Struct const &impl)
 template<>
 ASTNode normalize(ASTNode n, SwitchCase const &impl)
 {
+    n->init_namespace();
     auto case_value = std::visit(
         overloads {
             [&impl](ExpressionList const &list) -> ASTNode {
                 ASTNodes values;
                 for (auto const &e : list.expressions) {
                     if (auto const *id { get_if<Identifier>(e) }; id != nullptr) {
-                        values.emplace_back(normalize(make_node<DefaultSwitchValue>(e)));
-                    } else {
-                        values.emplace_back(normalize(e));
+                        if (id->identifier == L"_"sv) {
+                            values.emplace_back(normalize(make_node<DefaultSwitchValue>(e)));
+                            continue;
+                        }
                     }
+                    values.emplace_back(normalize(e));
                 }
                 return make_node<ExpressionList>(impl.case_value, values);
             },
@@ -558,7 +561,7 @@ ASTNode normalize(ASTNode n, SwitchCase const &impl)
                 return normalize(impl.case_value);
             } },
         impl.case_value->node);
-    return make_node<SwitchCase>(n, case_value, normalize(impl.statement));
+    return make_node<SwitchCase>(n, case_value, normalize(impl.binding), normalize(impl.statement));
 }
 
 template<>
@@ -651,7 +654,6 @@ ASTNode normalize(ASTNode node)
         if (node->ns != nullptr) {
             node->id.repo->push_namespace(node);
         }
-        char const *t = SyntaxNodeType_name(node->type());
         ret = std::visit(
             [&node](auto impl) {
                 return normalize(node, impl);

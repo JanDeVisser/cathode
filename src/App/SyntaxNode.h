@@ -10,6 +10,7 @@
 #include <expected>
 #include <map>
 #include <ostream>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -24,6 +25,7 @@
 
 namespace Lia {
 
+using namespace std::literals;
 using namespace Util;
 
 #define SyntaxNodeTypes(S) \
@@ -212,161 +214,191 @@ enum class Visibility {
     Export,
 };
 
-struct Alias {
+struct AbstractSyntaxNode {
+    AbstractSyntaxNode() = default;
+    BindResult bind(ASTNode const &n) const
+    {
+        return nullptr;
+    }
+};
+
+struct Alias : public AbstractSyntaxNode {
     std::wstring name;
     ASTNode      aliased_type;
 
     Alias(std::wstring name, ASTNode aliased_type);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct ArgumentList {
+struct ArgumentList : public AbstractSyntaxNode {
     ASTNodes arguments;
 
     explicit ArgumentList(ASTNodes arguments);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct BinaryExpression {
+struct BinaryExpression : public AbstractSyntaxNode {
     ASTNode  lhs;
     Operator op;
     ASTNode  rhs;
 
     BinaryExpression(ASTNode lhs, Operator op, ASTNode rhs);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Block {
+struct Block : public AbstractSyntaxNode {
     ASTNodes statements;
     Label    label;
 
     Block() = default;
     Block(ASTNodes statements, Label label = { });
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct BoolConstant {
+struct BoolConstant : public AbstractSyntaxNode {
     bool value;
 
     explicit BoolConstant(bool value);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Break {
+struct Break : public AbstractSyntaxNode {
     Label   label;
     ASTNode block;
 
     explicit Break(Label label, ASTNode block = nullptr);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Call {
+struct Call : public AbstractSyntaxNode {
     ASTNode callable;
     ASTNode arguments;
     ASTNode function;
 
-    Call(ASTNode callable, ASTNode arguments);
+    Call(ASTNode callable, ASTNode arguments, ASTNode function = nullptr);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Comptime {
+struct Comptime : public AbstractSyntaxNode {
     std::wstring script_text;
     ASTNode      statements;
     std::wstring output;
 
-    explicit Comptime(std::wstring_view script_text, ASTNode const &block = nullptr);
+    explicit Comptime(std::wstring_view script_text, ASTNode const &block = nullptr, std::wstring_view output = L""sv);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Continue {
+struct Continue : public AbstractSyntaxNode {
     Label label;
 
     Continue(Label label);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct CString {
+struct CString : public AbstractSyntaxNode {
     std::string string;
+    CString(std::string string);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Decimal {
+struct Decimal : public AbstractSyntaxNode {
     double value;
 
     Decimal(std::wstring_view whole, std::wstring_view fraction = L"", std::wstring_view exponent = L"");
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct DefaultSwitchValue {
+struct DefaultSwitchValue : public AbstractSyntaxNode {
     DefaultSwitchValue() = default;
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct DeferStatement {
+struct DeferStatement : public AbstractSyntaxNode {
     ASTNode statement;
 
     DeferStatement(ASTNode statement);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Dummy {
+struct Dummy : public AbstractSyntaxNode {
     Dummy() = default;
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Embed {
+struct Embed : public AbstractSyntaxNode {
     std::wstring file_name;
 
     Embed(std::wstring_view file_name);
 };
 
-struct EnumValue {
+struct EnumValue : public AbstractSyntaxNode {
     std::wstring label;
     ASTNode      value;
     ASTNode      payload;
 
     EnumValue(std::wstring label, ASTNode value, ASTNode payload);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Enum {
+struct Enum : public AbstractSyntaxNode {
     std::wstring name;
     ASTNode      underlying_type;
     ASTNodes     values;
 
     Enum(std::wstring name, ASTNode underlying_type, ASTNodes values);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct ExportDeclaration {
+struct ExportDeclaration : public AbstractSyntaxNode {
     std::wstring name;
     ASTNode      declaration;
 
     ExportDeclaration(std::wstring name, ASTNode declaration);
 };
 
-struct ExpressionList {
+struct ExpressionList : public AbstractSyntaxNode {
     ASTNodes expressions;
 
     explicit ExpressionList(ASTNodes expressions);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Extern {
+struct Extern : public AbstractSyntaxNode {
     ASTNodes     declarations;
     std::wstring library;
 
     Extern(ASTNodes declarations, std::wstring library);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct ExternLink {
+struct ExternLink : public AbstractSyntaxNode {
     std::wstring link_name;
 
     ExternLink(std::wstring link_name);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct ForStatement {
+struct ForStatement : public AbstractSyntaxNode {
     std::wstring range_variable;
     ASTNode      range_expr;
     ASTNode      statement;
     Label        label;
 
     ForStatement(std::wstring var, ASTNode expr, ASTNode statement, Label label = { });
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct FunctionDeclaration {
+struct FunctionDeclaration : public AbstractSyntaxNode {
     std::wstring name;
     ASTNodes     generics;
     ASTNodes     parameters;
     ASTNode      return_type;
 
     FunctionDeclaration(std::wstring name, ASTNodes generics, ASTNodes parameters, ASTNode return_type);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct FunctionDefinition {
+struct FunctionDefinition : public AbstractSyntaxNode {
     std::wstring name;
     ASTNode      declaration;
     ASTNode      implementation;
@@ -377,15 +409,17 @@ struct FunctionDefinition {
     ASTNode      instantiate(ASTNode const &n, std::vector<pType> const &generic_args) const;
     ASTNode      instantiate(ASTNode const &n, std::map<std::wstring, pType> const &generic_args) const;
     std::wstring mangled_name(ASTNode const &n) const;
+    BindResult   bind(ASTNode const &n) const;
 };
 
-struct Identifier {
+struct Identifier : public AbstractSyntaxNode {
     std::wstring identifier;
 
     explicit Identifier(std::wstring_view identifier);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct IdentifierList {
+struct IdentifierList : public AbstractSyntaxNode {
     Strings identifiers;
 
     IdentifierList(auto const &id)
@@ -418,55 +452,60 @@ private:
     }
 };
 
-struct IfStatement {
+struct IfStatement : public AbstractSyntaxNode {
     ASTNode condition;
     ASTNode if_branch;
     ASTNode else_branch;
     Label   label;
 
     IfStatement(ASTNode condition, ASTNode if_branch, ASTNode else_branch, Label label = { });
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Import {
+struct Import : public AbstractSyntaxNode {
     Strings file_name;
 
     explicit Import(Strings file_name);
 };
 
-struct Include {
+struct Include : public AbstractSyntaxNode {
     std::wstring file_name;
 
     explicit Include(std::wstring_view file_name);
 };
 
-struct LoopStatement {
+struct LoopStatement : public AbstractSyntaxNode {
     Label   label;
     ASTNode statement;
 
     LoopStatement(Label label, ASTNode statement);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Module {
+struct Module : public AbstractSyntaxNode {
     std::wstring name;
     std::wstring source;
     ASTNodes     statements;
 
     Module(std::wstring name, std::wstring source);
     Module(std::wstring name, std::wstring source, ASTNodes const &statements);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct ModuleProxy {
+struct ModuleProxy : public AbstractSyntaxNode {
     std::wstring name;
     ASTNode      module;
 
     ModuleProxy(std::wstring name, ASTNode module = nullptr);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Nullptr {
+struct Nullptr : public AbstractSyntaxNode {
     Nullptr();
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Number {
+struct Number : public AbstractSyntaxNode {
     using Int = std::variant<uint64_t, int64_t, uint32_t, int32_t, uint16_t, int16_t, uint8_t, int8_t>;
     Int value;
 
@@ -488,6 +527,7 @@ struct Number {
     {
         assign(type, v);
     }
+    BindResult bind(ASTNode const &n) const;
 
 private:
     void assign(IntType const &type, auto v)
@@ -536,14 +576,15 @@ T get(Number const &number)
         number.value);
 }
 
-struct Parameter {
+struct Parameter : public AbstractSyntaxNode {
     std::wstring name;
     ASTNode      type_name;
 
     Parameter(std::wstring name, ASTNode type_name);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Program {
+struct Program : public AbstractSyntaxNode {
     std::wstring name;
     std::wstring source;
     ASTNodes     statements;
@@ -551,69 +592,78 @@ struct Program {
     Program(std::wstring name, std::wstring source);
     Program(std::wstring name, ASTNodes statements);
     Program(std::wstring name, std::wstring source, ASTNodes statements);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct PublicDeclaration {
+struct PublicDeclaration : public AbstractSyntaxNode {
     std::wstring name;
     ASTNode      declaration;
 
     PublicDeclaration(std::wstring name, ASTNode declaration);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct QuotedString {
+struct QuotedString : public AbstractSyntaxNode {
     std::wstring string;
     QuoteType    quote_type;
 
     QuotedString(std::wstring_view str, QuoteType type);
 };
 
-struct Return {
+struct Return : public AbstractSyntaxNode {
     ASTNode expression;
 
     explicit Return(ASTNode expression);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct StampedIdentifier {
-    std::wstring identifier;
-    ASTNodes     arguments;
+struct StampedIdentifier : public Identifier {
+    ASTNodes arguments;
 
     explicit StampedIdentifier(std::wstring_view identifier, ASTNodes arguments);
 };
 
-struct String {
+struct String : public AbstractSyntaxNode {
     std::wstring string;
+    String(std::wstring string);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct StructMember {
+struct StructMember : public AbstractSyntaxNode {
     std::wstring label;
     ASTNode      member_type;
 
     StructMember(std::wstring label, ASTNode payload);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Struct {
+struct Struct : public AbstractSyntaxNode {
     std::wstring name;
     ASTNodes     members;
 
     Struct(std::wstring name, ASTNodes members);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct SwitchCase {
+struct SwitchCase : public AbstractSyntaxNode {
     ASTNode case_value;
+    ASTNode binding;
     ASTNode statement;
 
-    SwitchCase(ASTNode case_value, ASTNode statement);
+    SwitchCase(ASTNode case_value, ASTNode binding, ASTNode statement);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct SwitchStatement {
+struct SwitchStatement : public AbstractSyntaxNode {
     Label    label;
     ASTNode  switch_value;
     ASTNodes switch_cases;
 
     SwitchStatement(Label label, ASTNode switch_value, ASTNodes switch_cases);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct TagValue {
+struct TagValue : public AbstractSyntaxNode {
     ASTNode      operand { nullptr };
     int64_t      tag_value;
     std::wstring label;
@@ -685,7 +735,7 @@ concept is_type_specification = std::is_same_v<S, TypeNameNode>
     || std::is_same_v<S, PointerDescriptionNode>
     || std::is_same_v<S, ResultDescriptionNode>;
 
-struct TypeSpecification {
+struct TypeSpecification : public AbstractSyntaxNode {
 
     TypeSpecificationDescription description;
 
@@ -697,16 +747,18 @@ struct TypeSpecification {
         : description(specification)
     {
     }
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct UnaryExpression {
+struct UnaryExpression : public AbstractSyntaxNode {
     Operator op;
     ASTNode  operand;
 
     UnaryExpression(Operator op, ASTNode operand);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct VariableDeclaration {
+struct VariableDeclaration : public AbstractSyntaxNode {
     std::wstring name;
     ASTNode      type_name { };
     ASTNode      initializer;
@@ -714,25 +766,29 @@ struct VariableDeclaration {
     Visibility   visibility { Visibility::Static };
 
     VariableDeclaration(std::wstring name, ASTNode type_name, ASTNode initializer, bool is_const);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Void {
+struct Void : public AbstractSyntaxNode {
     Void();
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct WhileStatement {
+struct WhileStatement : public AbstractSyntaxNode {
     Label   label;
     ASTNode condition;
     ASTNode statement;
 
     WhileStatement(Label label, ASTNode condition, ASTNode statement);
+    BindResult bind(ASTNode const &n) const;
 };
 
-struct Yield {
+struct Yield : public AbstractSyntaxNode {
     Label   label;
     ASTNode statement;
 
     Yield(Label label, ASTNode statement);
+    BindResult bind(ASTNode const &n) const;
 };
 
 template<class N>
@@ -746,6 +802,7 @@ concept Constant = std::is_same_v<N, Number>
     || std::is_same_v<N, Decimal>
     || std::is_same_v<N, BoolConstant>
     || std::is_same_v<N, QuotedString>
+    || std::is_same_v<N, TagValue>
     || std::is_same_v<N, Void>;
 
 bool is_constant(ASTNode const &n);
@@ -976,6 +1033,62 @@ ASTNode      coerce(ASTNode node, pType const &type);
 ASTNode      stamp(ASTNode node);
 ASTNodes     stamp(ASTNodes nodes);
 ASTNode      fold(ASTNode node);
+
+#define try_bind(expr)                                                      \
+    (                                                                       \
+        {                                                                   \
+            auto const &__expr = (expr);                                    \
+            if (auto const maybe = Lia::bind(__expr); !maybe.has_value()) { \
+                return BindError { maybe.error() };                         \
+            }                                                               \
+            ((__expr)->bound_type);                                         \
+        })
+
+template<typename R>
+    requires std::ranges::range<R> && std::same_as<std::ranges::range_value_t<R>, ASTNode>
+BindResults bind_nodes(R const &nodes)
+{
+    pTypes                   types;
+    std::optional<ASTStatus> ret { };
+
+    for (auto &n : nodes) {
+        auto res = bind(n);
+        if (!res.has_value() || res.value() == nullptr) {
+            if (!ret.has_value()) {
+                if (!res.has_value()) {
+                    ret = res.error();
+                } else {
+                    ret = ASTStatus::Undetermined;
+                }
+            }
+            types.push_back(pType { nullptr });
+        } else {
+            types.push_back(res.value());
+        }
+    }
+    if (ret.has_value()) {
+        return std::unexpected(ret.value());
+    }
+    return types;
+}
+
+static BindResults bind_nodes(ASTNodes nodes)
+{
+    return bind_nodes(nodes | std::ranges::views::all);
+}
+
+#define try_bind_nodes(nodes)                                                 \
+    (                                                                         \
+        {                                                                     \
+            auto const &__nodes = (nodes);                                    \
+            pTypes      __types;                                              \
+            if (auto const maybe = bind_nodes(__nodes); !maybe.has_value()) { \
+                return BindError { maybe.error() };                           \
+            } else {                                                          \
+                __types = maybe.value();                                      \
+            }                                                                 \
+            (__types);                                                        \
+        })
 
 }
 

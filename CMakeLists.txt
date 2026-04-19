@@ -115,6 +115,17 @@ add_library(
     src/App/Stamp.cpp
     src/App/SyntaxNode.cpp
     src/App/Type.cpp
+    src/App/AST/Call.cpp
+    src/App/AST/Constant.cpp
+    src/App/AST/ControlFlow.cpp
+    src/App/AST/Defer.cpp
+    src/App/AST/Expression.cpp
+    src/App/AST/Function.cpp
+    src/App/AST/Identifier.cpp
+    src/App/AST/Module.cpp
+    src/App/AST/PreProcess.cpp
+    src/App/AST/Switch.cpp
+    src/App/AST/Type.cpp
     src/App/QBE/Context.cpp
     src/App/QBE/Execute.cpp
     src/App/QBE/Expr.cpp

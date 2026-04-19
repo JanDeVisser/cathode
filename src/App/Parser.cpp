@@ -1773,6 +1773,18 @@ ASTNode parse_switch(Parser &parser)
                 parser.append(res.error().location, "Expected `=>` in switch case");
                 return nullptr;
             }
+            ASTNode binding { nullptr };
+            if (lexer.accept_symbol('|')) {
+                if (auto res { lexer.expect_identifier() }; !res) {
+                    parser.append(res.error(), "Expected payload binding name");
+                    return nullptr;
+                } else {
+                    binding = parser.make_node<Identifier>(res.value().location, parser.text_of(res.value()));
+                }
+                if (!lexer.expect_symbol('|')) {
+                    parser.append(lexer.last_location, L"Expected `|` to terminate the payload binding `{}`", get<Identifier>(binding).identifier);
+                }
+            }
             auto statement { parser.parse_statement() };
             if (statement == nullptr) {
                 return nullptr;
@@ -1781,7 +1793,7 @@ ASTNode parse_switch(Parser &parser)
                 parser.append(lexer.last_location, "Expected `;` terminating switch case");
                 return nullptr;
             }
-            cases.emplace_back(parser.make_node<SwitchCase>(value->location + lexer.last_location, value, statement));
+            cases.emplace_back(parser.make_node<SwitchCase>(value->location + lexer.last_location, value, binding, statement));
         } while (!lexer.accept_symbol('}'));
     }
     return parser.make_node<SwitchStatement>(location + lexer.last_location, label, switch_value, cases);
@@ -1878,7 +1890,7 @@ template<typename Ret, typename Fun>
 Ret find_in_node(Parser const &parser, Strings const &name, Fun const &function)
 {
     assert(!parser.namespaces.empty());
-    dump_namespace_stack(parser, std::format("[S* {}]", as_utf8(name.back())));
+    dump_namespace_stack(parser, std::format(L"[S* {}]", name.back()));
     auto ns { parser.namespaces.back() };
     for (auto const &n : name | std::ranges::views::take(name.size() - 1)) {
         auto mod { ns->find_module(n) };

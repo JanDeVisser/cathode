@@ -1,0 +1,17 @@
+enum X: u64 {
+    A: string = 69,
+    B: i64  = 420,
+}
+
+export func main() i32 {
+    x: X = X.A = "quux"
+    switch x {
+        X.A => |s| putln(s);
+        X.B => |i| {
+            putint(i)
+            endln()
+        };
+    }
+    return 0::i32
+}
+

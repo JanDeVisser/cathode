@@ -64,14 +64,14 @@ ASTNode normalize(ASTNode n, BinaryExpression const &impl)
         return make_node<ExpressionList>(n, nodes);
     };
 
-    auto make_name_list = [](ASTNode const &n) -> std::expected<ASTNode, LiaError> {
+    auto make_name_list = [](ASTNode const &n) -> std::expected<ASTNode, LangError> {
         Strings                                                  identifiers;
-        std::function<std::expected<ASTNode, LiaError>(ASTNode)> flatten;
-        flatten = [&identifiers, &flatten](ASTNode n) -> std::expected<ASTNode, LiaError> {
+        std::function<std::expected<ASTNode, LangError>(ASTNode)> flatten;
+        flatten = [&identifiers, &flatten](ASTNode n) -> std::expected<ASTNode, LangError> {
             if (is<BinaryExpression>(n)) {
                 auto const &binexp { get<BinaryExpression>(n) };
                 if (binexp.op != Operator::MemberAccess) {
-                    return std::unexpected(LiaError { n->location, L"Expected dotted identifier list" });
+                    return std::unexpected(LangError { n->location, L"Expected dotted identifier list" });
                 }
                 if (auto res = flatten(binexp.lhs); !res) {
                     return std::unexpected(res.error());
@@ -82,7 +82,7 @@ ASTNode normalize(ASTNode n, BinaryExpression const &impl)
             } else if (is<Identifier>(n)) {
                 identifiers.emplace_back(get<Identifier>(n).identifier);
             } else {
-                return std::unexpected(LiaError { n->location, L"Expected dotted identifier list" });
+                return std::unexpected(LangError { n->location, L"Expected dotted identifier list" });
             }
             return n;
         };

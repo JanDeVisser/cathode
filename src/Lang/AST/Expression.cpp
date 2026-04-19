@@ -41,7 +41,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
             auto const &label = get<Identifier>(rhs).identifier;
             if (auto res = std::visit(
                     overloads {
-                        [&label, this, &n, &type_type](TaggedUnionType const &t) -> std::expected<ASTNode, LiaError> {
+                        [&label, this, &n, &type_type](TaggedUnionType const &t) -> std::expected<ASTNode, LangError> {
                             if (auto v = t.value_for(label); v) {
                                 auto ret = make_node<TagValue>(n, static_cast<int64_t>(*v), label, t.payload_for(label), nullptr);
                                 ret->bound_type = type_type;
@@ -49,12 +49,12 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                                 return ret;
                             }
                             return std::unexpected(
-                                LiaError {
+                                LangError {
                                     rhs->location,
                                     std::format(L"Unknown tagged union value `{}`", label),
                                 });
                         },
-                        [&label, this, &n, &type_type](EnumType const &t) -> std::expected<ASTNode, LiaError> {
+                        [&label, this, &n, &type_type](EnumType const &t) -> std::expected<ASTNode, LangError> {
                             if (auto v = t.value_for(label); v) {
                                 auto ret = make_node<TagValue>(n, static_cast<int64_t>(*v), label, nullptr, nullptr);
                                 ret->bound_type = type_type;
@@ -62,14 +62,14 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                                 return ret;
                             }
                             return std::unexpected(
-                                LiaError {
+                                LangError {
                                     rhs->location,
                                     std::format(L"Unknown enum value `{}`", label),
                                 });
                         },
-                        [this](auto const &) -> std::expected<ASTNode, LiaError> {
+                        [this](auto const &) -> std::expected<ASTNode, LangError> {
                             return std::unexpected(
-                                LiaError {
+                                LangError {
                                     lhs->location,
                                     L"A type in the left-hand side of a member access must be an `enum` type",
                                 });

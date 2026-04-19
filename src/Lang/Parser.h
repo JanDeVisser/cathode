@@ -31,22 +31,22 @@ using NodeMap = std::map<std::wstring, ASTNode>;
 
 struct Parser {
 
-    struct LiaComptimeBlock {
+    struct LangComptimeBlock {
         constexpr static wchar_t const *begin = L"@comptime";
         constexpr static wchar_t const *end = L"@end";
     };
 
-    using LiaLexerTypes = LexerTypes<std::wstring_view, wchar_t, LiaKeyword>;
-    using LiaLexer = Lexer<
-        LiaLexerTypes,
-        LiaLexerTypes::ScannerPack<
-            LiaLexerTypes::CScannerPack,
-            LiaLexerTypes::QuotedStringScanner<LiaLexerTypes::DefaultQuotes>,
-            LiaLexerTypes::RawScanner<LiaComptimeBlock>>>;
-    using Token = LiaLexer::Token;
-    using LexerError = LiaLexer::LexerError;
-    using LexerResult = LiaLexer::LexerResult;
-    using OperatorSymbol = std::variant<wchar_t, LiaKeyword>;
+    using LangLexerTypes = LexerTypes<std::wstring_view, wchar_t, LangKeyword>;
+    using LangLexer = Lexer<
+        LangLexerTypes,
+        LangLexerTypes::ScannerPack<
+            LangLexerTypes::CScannerPack,
+            LangLexerTypes::QuotedStringScanner<LangLexerTypes::DefaultQuotes>,
+            LangLexerTypes::RawScanner<LangComptimeBlock>>>;
+    using Token = LangLexer::Token;
+    using LexerError = LangLexer::LexerError;
+    using LexerResult = LangLexer::LexerResult;
+    using OperatorSymbol = std::variant<wchar_t, LangKeyword>;
 
     struct OperatorDef {
         Operator       op;
@@ -64,11 +64,11 @@ struct Parser {
 
     static std::vector<OperatorDef> operators;
     std::wstring_view               text;
-    LiaLexer                        lexer {};
+    LangLexer                        lexer {};
     ParseLevel                      level { ParseLevel::Module };
     std::vector<ASTNodeImpl>        nodes;
     std::vector<Namespace>          namespace_nodes;
-    std::vector<LiaError>           errors;
+    std::vector<LangError>           errors;
     std::vector<ASTNode>            unbound_nodes;
     std::vector<NSNode>             namespaces;
     std::vector<ASTNode>            node_stack;
@@ -234,7 +234,7 @@ struct Parser {
         append(lexer_error.location, std::vformat(message.get(), std::make_wformat_args(args...)));
     }
 
-    BindError bind_error(LiaError const &error);
+    BindError bind_error(LangError const &error);
     BindError bind_error(TokenLocation location, std::wstring const &msg);
     BindError bind_error(TokenLocation location, std::string const &msg);
 

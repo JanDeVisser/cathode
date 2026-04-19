@@ -72,7 +72,7 @@ BindError ASTNode::bind_error(std::wstring const &msg) const
     return repo->bind_error((*this)->location, msg);
 }
 
-BindError ASTNode::bind_error(LiaError error) const
+BindError ASTNode::bind_error(LangError error) const
 {
     return repo->bind_error(std::move(error));
 }

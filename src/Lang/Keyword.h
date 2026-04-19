@@ -17,7 +17,7 @@ using namespace Util;
 
 using Precedence = uint16_t;
 
-#define LiaKeywords(S)         \
+#define LangKeywords(S)         \
     S(AssignAnd, "&=")         \
     S(AssignDecrement, "-=")   \
     S(AssignDivide, "/=")      \
@@ -69,19 +69,19 @@ using Precedence = uint16_t;
     S(While, "while")          \
     S(Yield, "yield")
 
-enum class LiaKeyword {
+enum class LangKeyword {
 #undef S
 #define S(KW, S) KW,
-    LiaKeywords(S)
+    LangKeywords(S)
 #undef S
 };
 
-struct LiaError {
+struct LangError {
     TokenLocation location;
     std::wstring  message;
 };
 
-extern char const *LiaKeyword_name(LiaKeyword kw);
+extern char const *LangKeyword_name(LangKeyword kw);
 
 }
 
@@ -89,23 +89,23 @@ namespace Util {
 
 using namespace Lang;
 
-using LiaKeywordMatch = KeywordMatch<LiaKeyword>;
+using LangKeywordMatch = KeywordMatch<LangKeyword>;
 
 template<>
-[[nodiscard]] inline std::optional<LiaKeywordMatch> match_keyword(std::string const &str)
+[[nodiscard]] inline std::optional<LangKeywordMatch> match_keyword(std::string const &str)
 {
 #undef S
 #define S(KW, STR)                                                                                                                  \
     {                                                                                                                               \
         std::string_view kw_str { STR };                                                                                            \
         if (kw_str.starts_with(str)) {                                                                                              \
-            return LiaKeywordMatch {                                                                                                \
-                LiaKeyword::KW,                                                                                                     \
-                (str.length() == kw_str.length()) ? LiaKeywordMatch::MatchType::FullMatch : LiaKeywordMatch::MatchType::PrefixMatch \
+            return LangKeywordMatch {                                                                                                \
+                LangKeyword::KW,                                                                                                     \
+                (str.length() == kw_str.length()) ? LangKeywordMatch::MatchType::FullMatch : LangKeywordMatch::MatchType::PrefixMatch \
             };                                                                                                                      \
         }                                                                                                                           \
     }
-    LiaKeywords(S)
+    LangKeywords(S)
 #undef S
         return { };
 }

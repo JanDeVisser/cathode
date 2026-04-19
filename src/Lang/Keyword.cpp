@@ -10,14 +10,14 @@
 
 namespace Lang {
 
-char const *LiaKeyword_name(LiaKeyword kw)
+char const *LangKeyword_name(LangKeyword kw)
 {
     switch (kw) {
 #undef S
 #define S(KW, S)         \
-    case LiaKeyword::KW: \
+    case LangKeyword::KW: \
         return S;
-        LiaKeywords(S)
+        LangKeywords(S)
 #undef S
             default : UNREACHABLE();
     }

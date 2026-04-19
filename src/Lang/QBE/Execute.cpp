@@ -525,9 +525,9 @@ ExecResult execute(ILFunction const &, pFrame const &frame, ExprDef const &instr
     Operator lia_op;
     switch (instruction.op) {
 #undef S
-#define S(Op, Str, LiaOp) \
+#define S(Op, Str, LangOp) \
     case ILOperation::Op: \
-        lia_op = LiaOp;   \
+        lia_op = LangOp;   \
         break;
         ILOPERATIONS(S)
 #undef S

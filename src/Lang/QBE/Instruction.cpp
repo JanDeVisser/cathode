@@ -18,7 +18,7 @@ std::wostream &operator<<(std::wostream &os, ILOperation const &op)
 {
     switch (op) {
 #undef S
-#define S(Op, Str, LiaOp) \
+#define S(Op, Str, LangOp) \
     case ILOperation::Op: \
         os << #Str;       \
         break;

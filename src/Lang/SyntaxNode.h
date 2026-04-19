@@ -151,7 +151,7 @@ struct ASTNode : public Ptr<struct ASTNodeImpl, Parser> {
     }
 
     BindError bind_error(std::wstring const &message) const;
-    BindError bind_error(LiaError error) const;
+    BindError bind_error(LangError error) const;
     BindError bind_error(wchar_t const *message) const { return bind_error(std::wstring(message)); }
 
     template<typename... Args>

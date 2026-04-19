@@ -240,7 +240,7 @@ enum class ILInstructionType {
 
 enum class ILOperation {
 #undef S
-#define S(Op, Str, LiaOp) Op,
+#define S(Op, Str, LangOp) Op,
     ILOPERATIONS(S)
 #undef S
 };

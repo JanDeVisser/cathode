@@ -4,15 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "Util/Logging.h"
-#include "Util/Utf8.h"
 #include <ranges>
+
+#include <Util/Logging.h>
+#include <Util/Utf8.h>
 
 #include <Lang/Parser.h>
 #include <Lang/SyntaxNode.h>
 #include <Lang/Type.h>
 
 namespace Lang {
+
+// #define DEBUG_NAMESPACE_STACK
 
 Namespace::Namespace(ASTNode node, NSNode parent)
     : node(std::move(node))
@@ -58,12 +61,12 @@ std::optional<Namespace::NSEntry> Namespace::at(std::wstring const &name) const
     if (a.size() == 1) {
         return a[0];
     }
-    return {};
+    return { };
 }
 
 Namespace::NSEntries Namespace::all(std::wstring const &name) const
 {
-    std::vector<Namespace::NSEntry> ret {};
+    std::vector<Namespace::NSEntry> ret { };
     if (node && is<ModuleProxy>(node)) {
         auto proxy { get<ModuleProxy>(node) };
         if (proxy.module) {
@@ -93,6 +96,9 @@ void Namespace::register_module(std::wstring const &name, ASTNode module)
 {
     assert(!contains(name));
     module->bound_type = TypeRegistry::module;
+#ifdef DEBUG_NAMESPACE_STACK
+    info(L"[S->m {}] {}", id.id.value(), name);
+#endif
     entries.emplace(name, Namespace::NSEntry { std::in_place_index<Namespace::Module>, module });
 }
 
@@ -109,7 +115,7 @@ pType Namespace::find_type(std::wstring const &name) const
                 [](pType const &type) -> pType {
                     return type;
                 },
-                [this, &name](auto const &entry) -> pType {
+                [](auto const &) -> pType {
                     return nullptr;
                 } },
             *entry);
@@ -132,6 +138,9 @@ ASTNode Namespace::current_function() const
 void Namespace::register_type(std::wstring name, pType type)
 {
     assert(!contains(name));
+#ifdef DEBUG_NAMESPACE_STACK
+    info(L"[S->t {}] {}", id.id.value(), name);
+#endif
     entries.emplace(name, type);
 }
 
@@ -175,6 +184,9 @@ pType Namespace::type_of(std::wstring const &name) const
 void Namespace::register_variable(std::wstring name, ASTNode variable)
 {
     assert(!contains(name));
+#ifdef DEBUG_NAMESPACE_STACK
+    info(L"[S->v {}] {}", id.id.value(), name);
+#endif
     entries.emplace(name, Namespace::NSEntry { std::in_place_index<Namespace::Variable>, variable });
 }
 
@@ -188,7 +200,7 @@ bool Namespace::has_function(std::wstring const &name) const
 
 ASTNodes Namespace::find_functions(std::wstring const &name) const
 {
-    ASTNodes ret {};
+    ASTNodes ret { };
     std::ranges::for_each(
         all(name) | std::ranges::views::enumerate,
         [&ret](auto const &t) {
@@ -227,7 +239,7 @@ ASTNode Namespace::find_function(std::wstring const &name, pType const &type) co
 ASTNodes Namespace::find_overloads(std::wstring const &name, ASTNodes const &type_args) const
 {
     auto     functions { find_functions(name) };
-    ASTNodes ret {};
+    ASTNodes ret { };
     std::ranges::for_each(
         find_functions(name),
         [&ret, &type_args](auto const &node) {
@@ -241,6 +253,9 @@ ASTNodes Namespace::find_overloads(std::wstring const &name, ASTNodes const &typ
 void Namespace::register_function(std::wstring name, ASTNode fnc)
 {
     assert(!contains(name) || has_function(name));
+#ifdef DEBUG_NAMESPACE_STACK
+    info(L"[S->f {}] {}", id.id.value(), name);
+#endif
     entries.emplace(name, Namespace::NSEntry { std::in_place_index<Namespace::Function>, fnc });
 }
 }

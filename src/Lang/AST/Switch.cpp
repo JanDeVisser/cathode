@@ -30,6 +30,37 @@ SwitchCase::SwitchCase(ASTNode case_value, ASTNode binding, ASTNode statement)
 {
 }
 
+ASTNode SwitchCase::normalized(ASTNode const &n) const
+{
+    n->init_namespace();
+    auto normalized_case_value = std::visit(
+        overloads {
+            [this](ExpressionList const &list) -> ASTNode {
+                ASTNodes values;
+                for (auto const &e : list.expressions) {
+                    if (auto const *id { get_if<Identifier>(e) }; id != nullptr) {
+                        if (id->identifier == L"_"sv) {
+                            values.emplace_back(normalize(make_node<DefaultSwitchValue>(e)));
+                            continue;
+                        }
+                    }
+                    values.emplace_back(normalize(e));
+                }
+                return make_node<ExpressionList>(case_value, values);
+            },
+            [this](Identifier const &id) -> ASTNode {
+                if (id.identifier == L"_"sv) {
+                    return normalize(make_node<DefaultSwitchValue>(case_value));
+                }
+                return normalize(case_value);
+            },
+            [this](auto const &) -> ASTNode {
+                return normalize(case_value);
+            } },
+        case_value->node);
+    return make_node<SwitchCase>(n, normalized_case_value, normalize(binding), normalize(statement));
+}
+
 BindResult SwitchCase::bind(ASTNode const &) const
 {
     try_bind(case_value);
@@ -42,6 +73,11 @@ SwitchStatement::SwitchStatement(Label label, ASTNode switch_value, ASTNodes swi
     , switch_value(std::move(switch_value))
     , switch_cases(std::move(switch_cases))
 {
+}
+
+ASTNode SwitchStatement::normalized(ASTNode const &n) const
+{
+    return make_node<SwitchStatement>(n, label, normalize(switch_value), normalize(switch_cases));
 }
 
 BindResult SwitchStatement::bind(ASTNode const &n) const

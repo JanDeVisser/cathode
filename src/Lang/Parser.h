@@ -64,15 +64,15 @@ struct Parser {
 
     static std::vector<OperatorDef> operators;
     std::wstring_view               text;
-    LangLexer                        lexer {};
+    LangLexer                       lexer { };
     ParseLevel                      level { ParseLevel::Module };
     std::vector<ASTNodeImpl>        nodes;
     std::vector<Namespace>          namespace_nodes;
-    std::vector<LangError>           errors;
+    std::vector<LangError>          errors;
     std::vector<ASTNode>            unbound_nodes;
     std::vector<NSNode>             namespaces;
     std::vector<ASTNode>            node_stack;
-    NodeMap                         modules {};
+    NodeMap                         modules { };
     ASTNode                         program;
     int                             pass { 0 };
     int                             unbound { 0 };
@@ -85,9 +85,10 @@ struct Parser {
     size_t             hunt(ASTNode const &n) const;
 
     template<class N, typename... Args>
-    ASTNode make_node(TokenLocation loc, Args... args)
+    ASTNode make_node(TokenLocation loc, Args &&...args)
     {
-        nodes.push_back(ASTNodeImpl::make<N>(args...));
+        ASTNodeImpl impl { ASTNodeImpl::make<N>(std::forward<Args>(args)...) };
+        nodes.push_back(impl);
         ASTNode ret = { this };
         auto   &n = nodes.back();
         n.id = ret;
@@ -97,9 +98,10 @@ struct Parser {
     }
 
     template<class N, typename... Args>
-    ASTNode make_node(Args... args)
+    ASTNode make_node(Args &&...args)
     {
-        nodes.push_back(ASTNodeImpl::make<N>(args...));
+        ASTNodeImpl impl { ASTNodeImpl::make<N>(std::forward<Args>(args)...) };
+        nodes.push_back(impl);
         ASTNode ret = { this };
         nodes.back().id = ret;
         trace(L"[C] {}", ret);
@@ -252,12 +254,10 @@ struct Parser {
 };
 
 template<typename Node, typename... Args>
-ASTNode make_node(ASTNode from, Args... args)
+ASTNode make_node(ASTNode from, Args &&...args)
 {
-    ASTNode ret = from.repo->make_node<Node>(from->location, args...);
-    if (from->ns != nullptr) {
-        ret->ns = from->ns;
-    }
+    ASTNode ret = from.repo->make_node<Node>(from->location, std::forward<Args>(args)...);
+    ret->ns = from->ns;
     ret->supercedes = from;
     from->superceded_by = ret;
     return ret;

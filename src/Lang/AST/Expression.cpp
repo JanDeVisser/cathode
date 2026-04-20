@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <functional>
+
 #include <Util/StringUtil.h>
 #include <Util/Utf8.h>
 
@@ -23,6 +25,110 @@ BinaryExpression::BinaryExpression(ASTNode lhs, Operator const op, ASTNode rhs)
     , op(op)
     , rhs(std::move(rhs))
 {
+}
+
+ASTNode BinaryExpression::normalized(ASTNode const &n) const
+{
+    auto make_expression_list = [&n]() -> ASTNode {
+        ASTNodes                     nodes;
+        std::function<void(ASTNode)> flatten;
+        flatten = [&nodes, &flatten](ASTNode n) {
+            if (auto const binary_expr = std::get_if<BinaryExpression>(&n->node); binary_expr != nullptr) {
+                auto binexp = *binary_expr;
+                if (binexp.op == Operator::Sequence) {
+                    flatten(binexp.lhs);
+                    nodes.push_back(normalize(binexp.rhs));
+                } else {
+                    nodes.push_back(normalize(n));
+                }
+            } else {
+                nodes.push_back(normalize(n));
+            }
+        };
+        flatten(n);
+        return make_node<ExpressionList>(n, nodes);
+    };
+
+    auto make_name_list = [](ASTNode const &n) -> std::expected<ASTNode, LangError> {
+        Strings                                                   identifiers;
+        std::function<std::expected<ASTNode, LangError>(ASTNode)> flatten;
+        flatten = [&identifiers, &flatten](ASTNode n) -> std::expected<ASTNode, LangError> {
+            if (is<BinaryExpression>(n)) {
+                auto const &binexp { get<BinaryExpression>(n) };
+                if (binexp.op != Operator::MemberAccess) {
+                    return std::unexpected(LangError { n->location, L"Expected dotted identifier list" });
+                }
+                if (auto res = flatten(binexp.lhs); !res) {
+                    return std::unexpected(res.error());
+                }
+                if (auto res = flatten(binexp.rhs); !res) {
+                    return std::unexpected(res.error());
+                }
+            } else if (is<Identifier>(n)) {
+                identifiers.emplace_back(get<Identifier>(n).identifier);
+            } else {
+                return std::unexpected(LangError { n->location, L"Expected dotted identifier list" });
+            }
+            return n;
+        };
+        if (is<Identifier>(n)) {
+            return make_node<IdentifierList>(n, get<Identifier>(n).identifier);
+        }
+        if (auto res = flatten(n); !res) {
+            return std::unexpected(res.error());
+        }
+        return make_node<IdentifierList>(n, identifiers);
+    };
+
+    switch (op) {
+    case Operator::Call: {
+        auto arg_list = normalize(rhs);
+        if (is<Void>(arg_list)) {
+            arg_list = make_node<ArgumentList>(arg_list, ASTNodes { });
+        } else if (!is<ExpressionList>(arg_list)) {
+            auto &parser { *(arg_list.repo) };
+            arg_list = parser.make_node<ArgumentList>(ASTNodes { arg_list });
+        } else {
+            arg_list = make_node<ArgumentList>(arg_list, get<ExpressionList>(arg_list).expressions);
+        }
+        assert(is<ArgumentList>(arg_list));
+        arg_list = normalize(arg_list);
+        if (auto res = make_name_list(lhs); !res) {
+            n.bind_error(res.error());
+            return { };
+        } else {
+            auto call = make_node<Call>(n, res.value(), arg_list);
+            return normalize(call);
+        }
+    }
+    case Operator::Sequence:
+        return make_expression_list();
+    case Operator::MemberAccess: {
+        auto aggregate { normalize(lhs) };
+        auto member { normalize(rhs) };
+        if (is<QuotedString>(member)) {
+            auto const &qs { get<QuotedString>(member) };
+            member = make_node<Identifier>(member, qs.string.substr(1, qs.string.length() - 2));
+        }
+        return make_node<BinaryExpression>(n, aggregate, op, member);
+    } break;
+    case Operator::Range:
+        return make_node<BinaryExpression>(n, normalize(lhs), op, normalize(rhs));
+    default:
+        if (assign_ops.contains(op)) {
+            auto const bin_expr = make_node<BinaryExpression>(
+                n,
+                normalize(lhs),
+                assign_ops[op],
+                normalize(rhs));
+            return make_node<BinaryExpression>(n, lhs, Operator::Assign, normalize(bin_expr));
+        }
+        auto normalized = make_node<BinaryExpression>(n, normalize(lhs), op, normalize(rhs));
+        if (auto folded = fold(normalized); folded != nullptr) {
+            return folded;
+        }
+        return normalized;
+    }
 }
 
 BindResult BinaryExpression::bind(ASTNode const &n) const
@@ -293,6 +399,11 @@ ExpressionList::ExpressionList(ASTNodes expressions)
 {
 }
 
+ASTNode ExpressionList::normalized(ASTNode const &n) const
+{
+    return make_node<ExpressionList>(n, normalize(expressions));
+}
+
 BindResult ExpressionList::bind(ASTNode const &) const
 {
     return TypeRegistry::the().typelist_of(try_bind_nodes(expressions));
@@ -302,6 +413,15 @@ UnaryExpression::UnaryExpression(Operator const op, ASTNode operand)
     : op(op)
     , operand(std::move(operand))
 {
+}
+
+ASTNode UnaryExpression::normalized(ASTNode const &n) const
+{
+    auto normalized_node { make_node<UnaryExpression>(n, op, normalize(operand)) };
+    if (auto folded { fold(normalized_node) }; folded != nullptr) {
+        return folded;
+    }
+    return normalized_node;
 }
 
 BindResult UnaryExpression::bind(ASTNode const &n) const

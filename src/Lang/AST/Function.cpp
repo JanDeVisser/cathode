@@ -92,6 +92,11 @@ ArgumentList::ArgumentList(ASTNodes arguments)
 {
 }
 
+ASTNode ArgumentList::normalized(ASTNode const &n) const
+{
+    return make_node<ArgumentList>(n, normalize(arguments));
+}
+
 BindResult ArgumentList::bind(ASTNode const &n) const
 {
     return TypeRegistry::the().typelist_of(try_bind_nodes(arguments));
@@ -106,6 +111,11 @@ Call::Call(ASTNode callable, ASTNode args, ASTNode function)
         NYI("Callable must be a function name, not a {}", SyntaxNodeType_name(this->callable->type()));
     }
     assert(this->arguments != nullptr);
+}
+
+ASTNode Call::normalized(ASTNode const &n) const
+{
+    return make_node<Call>(n, normalize(callable), normalize(arguments), normalize(function));
 }
 
 BindResult Call::bind(ASTNode const &n) const
@@ -308,6 +318,16 @@ FunctionDeclaration::FunctionDeclaration(std::wstring name, ASTNodes generics, A
 {
 }
 
+ASTNode FunctionDeclaration::normalized(ASTNode const &n) const
+{
+    return make_node<FunctionDeclaration>(
+        n,
+        std::wstring { name },
+        normalize(generics),
+        normalize(parameters),
+        normalize(return_type));
+}
+
 BindResult FunctionDeclaration::bind(ASTNode const &) const
 {
     return TypeRegistry::the().function_of(
@@ -340,6 +360,13 @@ std::wstring FunctionDefinition::mangled_name(ASTNode const &n) const
     default:
         UNREACHABLE();
     }
+}
+
+ASTNode FunctionDefinition::normalized(ASTNode const &n) const
+{
+    n->init_namespace();
+    auto ret = make_node<FunctionDefinition>(n, std::wstring { name }, normalize(declaration), normalize(implementation));
+    return ret;
 }
 
 BindResult FunctionDefinition::bind(ASTNode const &n) const
@@ -376,6 +403,11 @@ Parameter::Parameter(std::wstring name, ASTNode type_name)
     : name(std::move(name))
     , type_name(std::move(type_name))
 {
+}
+
+ASTNode Parameter::normalized(ASTNode const &n) const
+{
+    return make_node<Parameter>(n, std::wstring { name }, normalize(type_name));
 }
 
 BindResult Parameter::bind(ASTNode const &) const

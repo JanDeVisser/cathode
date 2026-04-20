@@ -216,7 +216,13 @@ enum class Visibility {
 
 struct AbstractSyntaxNode {
     AbstractSyntaxNode() = default;
-    BindResult bind(ASTNode const &n) const
+
+    ASTNode normalized(ASTNode const &n) const
+    {
+        return n;
+    }
+
+    BindResult bind(ASTNode const &) const
     {
         return nullptr;
     }
@@ -227,6 +233,7 @@ struct Alias : public AbstractSyntaxNode {
     ASTNode      aliased_type;
 
     Alias(std::wstring name, ASTNode aliased_type);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -234,6 +241,7 @@ struct ArgumentList : public AbstractSyntaxNode {
     ASTNodes arguments;
 
     explicit ArgumentList(ASTNodes arguments);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -243,6 +251,7 @@ struct BinaryExpression : public AbstractSyntaxNode {
     ASTNode  rhs;
 
     BinaryExpression(ASTNode lhs, Operator op, ASTNode rhs);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -252,6 +261,7 @@ struct Block : public AbstractSyntaxNode {
 
     Block() = default;
     Block(ASTNodes statements, Label label = { });
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -267,6 +277,7 @@ struct Break : public AbstractSyntaxNode {
     ASTNode block;
 
     explicit Break(Label label, ASTNode block = nullptr);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -276,6 +287,7 @@ struct Call : public AbstractSyntaxNode {
     ASTNode function;
 
     Call(ASTNode callable, ASTNode arguments, ASTNode function = nullptr);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -285,6 +297,7 @@ struct Comptime : public AbstractSyntaxNode {
     std::wstring output;
 
     explicit Comptime(std::wstring_view script_text, ASTNode const &block = nullptr, std::wstring_view output = L""sv);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -317,6 +330,7 @@ struct DeferStatement : public AbstractSyntaxNode {
     ASTNode statement;
 
     DeferStatement(ASTNode statement);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -329,6 +343,7 @@ struct Embed : public AbstractSyntaxNode {
     std::wstring file_name;
 
     Embed(std::wstring_view file_name);
+    ASTNode normalized(ASTNode const &n) const;
 };
 
 struct EnumValue : public AbstractSyntaxNode {
@@ -337,6 +352,7 @@ struct EnumValue : public AbstractSyntaxNode {
     ASTNode      payload;
 
     EnumValue(std::wstring label, ASTNode value, ASTNode payload);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -346,6 +362,7 @@ struct Enum : public AbstractSyntaxNode {
     ASTNodes     values;
 
     Enum(std::wstring name, ASTNode underlying_type, ASTNodes values);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -354,12 +371,14 @@ struct ExportDeclaration : public AbstractSyntaxNode {
     ASTNode      declaration;
 
     ExportDeclaration(std::wstring name, ASTNode declaration);
+    ASTNode normalized(ASTNode const &n) const;
 };
 
 struct ExpressionList : public AbstractSyntaxNode {
     ASTNodes expressions;
 
     explicit ExpressionList(ASTNodes expressions);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -368,6 +387,7 @@ struct Extern : public AbstractSyntaxNode {
     std::wstring library;
 
     Extern(ASTNodes declarations, std::wstring library);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -385,6 +405,7 @@ struct ForStatement : public AbstractSyntaxNode {
     Label        label;
 
     ForStatement(std::wstring var, ASTNode expr, ASTNode statement, Label label = { });
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -395,6 +416,7 @@ struct FunctionDeclaration : public AbstractSyntaxNode {
     ASTNode      return_type;
 
     FunctionDeclaration(std::wstring name, ASTNodes generics, ASTNodes parameters, ASTNode return_type);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -409,6 +431,7 @@ struct FunctionDefinition : public AbstractSyntaxNode {
     ASTNode      instantiate(ASTNode const &n, std::vector<pType> const &generic_args) const;
     ASTNode      instantiate(ASTNode const &n, std::map<std::wstring, pType> const &generic_args) const;
     std::wstring mangled_name(ASTNode const &n) const;
+    ASTNode      normalized(ASTNode const &n) const;
     BindResult   bind(ASTNode const &n) const;
 };
 
@@ -459,6 +482,7 @@ struct IfStatement : public AbstractSyntaxNode {
     Label   label;
 
     IfStatement(ASTNode condition, ASTNode if_branch, ASTNode else_branch, Label label = { });
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -466,12 +490,14 @@ struct Import : public AbstractSyntaxNode {
     Strings file_name;
 
     explicit Import(Strings file_name);
+    ASTNode normalized(ASTNode const &n) const;
 };
 
 struct Include : public AbstractSyntaxNode {
     std::wstring file_name;
 
     explicit Include(std::wstring_view file_name);
+    ASTNode normalized(ASTNode const &n) const;
 };
 
 struct LoopStatement : public AbstractSyntaxNode {
@@ -479,6 +505,7 @@ struct LoopStatement : public AbstractSyntaxNode {
     ASTNode statement;
 
     LoopStatement(Label label, ASTNode statement);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -489,6 +516,7 @@ struct Module : public AbstractSyntaxNode {
 
     Module(std::wstring name, std::wstring source);
     Module(std::wstring name, std::wstring source, ASTNodes const &statements);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -581,6 +609,7 @@ struct Parameter : public AbstractSyntaxNode {
     ASTNode      type_name;
 
     Parameter(std::wstring name, ASTNode type_name);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -592,6 +621,7 @@ struct Program : public AbstractSyntaxNode {
     Program(std::wstring name, std::wstring source);
     Program(std::wstring name, ASTNodes statements);
     Program(std::wstring name, std::wstring source, ASTNodes statements);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -600,7 +630,7 @@ struct PublicDeclaration : public AbstractSyntaxNode {
     ASTNode      declaration;
 
     PublicDeclaration(std::wstring name, ASTNode declaration);
-    BindResult bind(ASTNode const &n) const;
+    ASTNode normalized(ASTNode const &n) const;
 };
 
 struct QuotedString : public AbstractSyntaxNode {
@@ -608,12 +638,14 @@ struct QuotedString : public AbstractSyntaxNode {
     QuoteType    quote_type;
 
     QuotedString(std::wstring_view str, QuoteType type);
+    ASTNode normalized(ASTNode const &n) const;
 };
 
 struct Return : public AbstractSyntaxNode {
     ASTNode expression;
 
     explicit Return(ASTNode expression);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -634,6 +666,7 @@ struct StructMember : public AbstractSyntaxNode {
     ASTNode      member_type;
 
     StructMember(std::wstring label, ASTNode payload);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -642,6 +675,7 @@ struct Struct : public AbstractSyntaxNode {
     ASTNodes     members;
 
     Struct(std::wstring name, ASTNodes members);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -651,6 +685,7 @@ struct SwitchCase : public AbstractSyntaxNode {
     ASTNode statement;
 
     SwitchCase(ASTNode case_value, ASTNode binding, ASTNode statement);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -660,6 +695,7 @@ struct SwitchStatement : public AbstractSyntaxNode {
     ASTNodes switch_cases;
 
     SwitchStatement(Label label, ASTNode switch_value, ASTNodes switch_cases);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -747,6 +783,8 @@ struct TypeSpecification : public AbstractSyntaxNode {
         : description(specification)
     {
     }
+
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -755,6 +793,7 @@ struct UnaryExpression : public AbstractSyntaxNode {
     ASTNode  operand;
 
     UnaryExpression(Operator op, ASTNode operand);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -766,6 +805,7 @@ struct VariableDeclaration : public AbstractSyntaxNode {
     Visibility   visibility { Visibility::Static };
 
     VariableDeclaration(std::wstring name, ASTNode type_name, ASTNode initializer, bool is_const);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -780,6 +820,7 @@ struct WhileStatement : public AbstractSyntaxNode {
     ASTNode statement;
 
     WhileStatement(Label label, ASTNode condition, ASTNode statement);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -788,6 +829,7 @@ struct Yield : public AbstractSyntaxNode {
     ASTNode statement;
 
     Yield(Label label, ASTNode statement);
+    ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -891,9 +933,9 @@ struct ASTNodeImpl {
     }
 
     template<class N, typename... Args>
-    static ASTNodeImpl make(TokenLocation const &loc, Args... args)
+    static ASTNodeImpl make(TokenLocation const &loc, Args &&...args)
     {
-        ASTNodeImpl ret = make<N>(loc, args...);
+        ASTNodeImpl ret = make<N>(loc, std::forward<Args>(args)...);
         ret.location = loc;
         return ret;
     }
@@ -905,10 +947,10 @@ struct ASTNodeImpl {
     }
 
     template<class N, typename... Args>
-    static ASTNodeImpl make(Args... args)
+    static ASTNodeImpl make(Args &&...args)
     {
         ASTNodeImpl ret;
-        ret.node = N { args... };
+        ret.node = N { std::forward<Args>(args)... };
         return ret;
     }
 
@@ -1034,14 +1076,14 @@ ASTNode      stamp(ASTNode node);
 ASTNodes     stamp(ASTNodes nodes);
 ASTNode      fold(ASTNode node);
 
-#define try_bind(expr)                                                      \
-    (                                                                       \
-        {                                                                   \
-            auto const &__expr = (expr);                                    \
+#define try_bind(expr)                                                       \
+    (                                                                        \
+        {                                                                    \
+            auto const &__expr = (expr);                                     \
             if (auto const maybe = Lang::bind(__expr); !maybe.has_value()) { \
-                return BindError { maybe.error() };                         \
-            }                                                               \
-            ((__expr)->bound_type);                                         \
+                return BindError { maybe.error() };                          \
+            }                                                                \
+            ((__expr)->bound_type);                                          \
         })
 
 template<typename R>

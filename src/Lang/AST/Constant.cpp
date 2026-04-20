@@ -102,6 +102,50 @@ QuotedString::QuotedString(std::wstring_view str, QuoteType type)
 {
 }
 
+ASTNode QuotedString::normalized(ASTNode const &n) const
+{
+    auto unescape = [](auto const &s) -> std::wstring {
+        std::wstring escaped;
+        bool         escape { false };
+        for (auto const ch : s.substr(0, s.length() - 1).substr(1)) {
+            if (escape) {
+                switch (ch) {
+                case 'n':
+                    escaped += '\n';
+                    break;
+                case 'r':
+                    escaped += '\r';
+                    break;
+                case 't':
+                    escaped += '\t';
+                    break;
+                default:
+                    escaped += ch;
+                }
+                escape = false;
+            } else {
+                if (ch == '\\') {
+                    escape = true;
+                } else {
+                    escaped += ch;
+                }
+            }
+        }
+        return escaped;
+    };
+
+    switch (quote_type) {
+    case QuoteType::DoubleQuote:
+        return make_node<String>(n, unescape(string));
+    case QuoteType::BackQuote:
+        return make_node<CString>(n, as_utf8(unescape(string)));
+    case QuoteType::SingleQuote:
+        return make_node<Number>(n, static_cast<uint64_t>(string[1]));
+    default:
+        UNREACHABLE();
+    }
+}
+
 String::String(std::wstring string)
     : string(std::move(string))
 {

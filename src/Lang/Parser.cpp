@@ -795,7 +795,6 @@ ASTNode Parser::parse_type()
                 return { };
             }
             arguments.push_back(arg);
-            auto t = lexer.peek();
             if (lexer.accept_symbol('>')) {
                 break;
             }
@@ -1009,8 +1008,7 @@ ASTNode parse_func_decl(Parser &parser, Parser::Token const &func)
         if (auto res = lexer.expect_symbol(':'); !res.has_value()) {
             parser.append(res.error(), "Expected ':' in function parameter declaration");
         }
-        auto          param_type = parser.parse_type();
-        TokenLocation end;
+        auto param_type = parser.parse_type();
         if (param_type == nullptr) {
             parser.append(lexer.peek(), "Expected parameter type");
             return { };
@@ -1023,8 +1021,7 @@ ASTNode parse_func_decl(Parser &parser, Parser::Token const &func)
             parser.append(res.error(), "Expected ',' in function signature");
         }
     }
-    auto          return_type = parser.parse_type();
-    TokenLocation return_type_loc;
+    auto return_type = parser.parse_type();
     if (return_type == nullptr) {
         parser.append(lexer.peek(), "Expected return type");
         return { };
@@ -1164,8 +1161,7 @@ ASTNode parse_c_func_decl(Parser &parser)
             }
         }
 
-        std::wstring  param_name;
-        TokenLocation start;
+        std::wstring param_name;
         if (auto res = lexer.accept_identifier(); !res.has_value()) {
             param_name = std::format(L"param{}", params.size());
         } else {
@@ -1275,7 +1271,6 @@ ASTNode parse_c_enum(Parser &parser)
         return { };
     }
     ASTNodes values;
-    int      value { 0 };
     while (true) {
         if (lexer.accept_symbol('}')) {
             break;
@@ -1851,7 +1846,6 @@ ASTNode Parser::parse_yield()
 
 BindResult Parser::bind(ASTNode node)
 {
-    auto node_was_program { false };
     if (node == nullptr) {
         node = program;
     }
@@ -1872,25 +1866,31 @@ BindResult Parser::bind(ASTNode node)
 
 // #define DEBUG_NAMESPACE_STACK
 
-void dump_namespace_stack(Parser const &parser, auto const &prefix)
-{
 #ifdef DEBUG_NAMESPACE_STACK
-    std::stringstream ss;
+
+void dump_namespace_stack(Parser const &parser, std::wstring_view prefix)
+{
+    std::wstringstream ss;
     ss << prefix;
     std::ranges::for_each(
         parser.namespaces | std::ranges::views::reverse,
         [&ss](auto const &n) {
             ss << " <- " << n->node.value() << ' ' << SyntaxNodeType_name(n->node->type()) << ' ' << n.id.value();
         });
-    info("{}", ss.str());
-#endif
+    info(L"{}", ss.str());
 }
+
+#else
+
+#define dump_namespace_stack(parser, prefix)
+
+#endif
 
 template<typename Ret, typename Fun>
 Ret find_in_node(Parser const &parser, Strings const &name, Fun const &function)
 {
     assert(!parser.namespaces.empty());
-    dump_namespace_stack(parser, std::format(L"[S* {}]", name.back()));
+    dump_namespace_stack(parser, std::format(L"[S* {}]", join(name, L"."sv)));
     auto ns { parser.namespaces.back() };
     for (auto const &n : name | std::ranges::views::take(name.size() - 1)) {
         auto mod { ns->find_module(n) };
@@ -2018,7 +2018,7 @@ void Parser::push_namespace(ASTNode const &n)
         n->ns->parent = namespaces.back();
     }
     namespaces.push_back(n->ns);
-    dump_namespace_stack(*this, std::format("[S+ {}]", n.value()));
+    dump_namespace_stack(*this, std::format(L"[S+ {}]", n.value()));
 }
 
 void Parser::pop_namespace(ASTNode const &n)
@@ -2026,7 +2026,7 @@ void Parser::pop_namespace(ASTNode const &n)
     assert(!namespaces.empty());
     if (namespaces.back()->node.value() == n.value()) {
         namespaces.pop_back();
-        dump_namespace_stack(*this, std::format("[S- {}]", n.value()));
+        dump_namespace_stack(*this, std::format(L"[S- {}]", n.value()));
     }
 }
 

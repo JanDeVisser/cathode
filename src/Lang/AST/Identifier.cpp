@@ -36,7 +36,7 @@ BindResult Identifier::bind(ASTNode const &n) const
     }
     if (is<ModuleType>(type)) {
         auto proxy { parser.namespaces.back()->find_module(identifier) };
-        auto ret = make_node<ModuleProxy>(n, identifier, get<ModuleProxy>(proxy).module);
+        auto ret = make_node<ModuleProxy>(n, std::wstring { identifier }, get<ModuleProxy>(proxy).module);
         ret->bound_type = type;
         ret->status = ASTStatus::Bound;
     }
@@ -59,6 +59,13 @@ VariableDeclaration::VariableDeclaration(std::wstring name, ASTNode type_name, A
     , initializer(std::move(initializer))
     , is_const(is_const)
 {
+}
+
+ASTNode VariableDeclaration::normalized(ASTNode const &n) const
+{
+    normalize(type_name);
+    normalize(initializer);
+    return n;
 }
 
 BindResult VariableDeclaration::bind(ASTNode const &n) const

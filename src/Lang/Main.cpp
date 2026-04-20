@@ -40,12 +40,12 @@ std::optional<std::wstring> load_file(fs::path const &file)
 {
     if (!fs::exists(file)) {
         log_error("File `{}` does not exist", file.string());
-        return {};
+        return { };
     }
     auto contents_maybe = read_file_by_name<wchar_t>(file.string());
     if (!contents_maybe.has_value()) {
         log_error("Could not read file `{}`: {}", file.string(), contents_maybe.error().description);
-        return {};
+        return { };
     }
     return contents_maybe.value();
 };
@@ -61,7 +61,7 @@ std::optional<std::wstring> load_directory(fs::path directory)
     for (auto const &entry : fs::directory_iterator(directory)) {
         if (entry.is_regular_file() && entry.path().extension() == ".lia") {
             if (auto contents_maybe = load_file(entry.path()); !contents_maybe) {
-                return {};
+                return { };
             } else {
                 ret += contents_maybe.value();
             }
@@ -76,7 +76,7 @@ std::optional<std::wstring> load_files(std::vector<fs::path> const &files)
     for (auto const &file : files) {
         if (fs::is_regular_file(file)) {
             if (auto contents_maybe = load_file(file); !contents_maybe) {
-                return {};
+                return { };
             } else {
                 ret += contents_maybe.value();
             }
@@ -91,7 +91,7 @@ struct Builder {
     fs::path       app_dir;
     Source         source;
     std::string    program_name;
-    Parser         parser {};
+    Parser         parser { };
     QBE::ILProgram program;
     std::wstring   source_text;
     bool           verbose { false };
@@ -187,7 +187,7 @@ struct Builder {
                             return load_file(p);
                         } else {
                             log_error("File `{}` is not a regular file or directory", p.string());
-                            return {};
+                            return { };
                         }
                     },
                     [this](std::vector<fs::path> const &paths) -> std::optional<std::wstring> {
@@ -239,6 +239,9 @@ struct Builder {
         if (!s.has_value()) {
             info("Second phase of semantic analysis failed after {} pass(es)", parser.pass);
             if (!parser.errors.empty()) {
+                if (has_option("dump-trees")) {
+                    dump(parser.program, std::wcerr);
+                }
                 log_error("Error(s) found during second phase of semantic analysis:");
                 for (auto const &err : parser.errors) {
                     log_error(L"{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);

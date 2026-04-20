@@ -24,6 +24,13 @@ Block::Block(ASTNodes statements, Label label)
 {
 }
 
+ASTNode Block::normalized(ASTNode const &n) const
+{
+    n->init_namespace();
+    auto ret = make_node<Block>(n, normalize(statements));
+    return ret;
+}
+
 BindResult Block::bind(ASTNode const &) const
 {
     auto types = try_bind_nodes(statements);
@@ -37,6 +44,34 @@ Break::Break(Label label, ASTNode block)
     : label(std::move(label))
     , block(std::move(block))
 {
+}
+
+ASTNode Break::normalized(ASTNode const &n) const
+{
+    Parser &parser { *(n.repo) };
+    if (parser.namespaces.empty()) {
+        n.error("`break` statement cannot appear at this level");
+        return n;
+    }
+    ASTNode block { nullptr };
+    for (NSNode const &ns : parser.namespaces | std::ranges::views::reverse) {
+        auto matches {
+            std::visit(
+                overloads {
+                    [this](Breakable auto const &b) -> bool {
+                        return !label || (label == b.label);
+                    },
+                    [](auto const &) -> bool {
+                        return false;
+                    } },
+                ns->node->node)
+        };
+        if (matches) {
+            return make_node<Break>(n, label, ns->node);
+        }
+    }
+    n.error(L"Block `{}` not found", *label);
+    return n;
 }
 
 BindResult Break::bind(ASTNode const &) const
@@ -62,6 +97,12 @@ ForStatement::ForStatement(std::wstring var, ASTNode expr, ASTNode statement, La
 {
     assert(this->range_expr != nullptr);
     assert(this->statement != nullptr);
+}
+
+ASTNode ForStatement::normalized(ASTNode const &n) const
+{
+    n->init_namespace();
+    return make_node<ForStatement>(n, range_variable, normalize(range_expr), normalize(statement));
 }
 
 BindResult ForStatement::bind(ASTNode const &n) const
@@ -94,6 +135,16 @@ IfStatement::IfStatement(ASTNode condition, ASTNode if_branch, ASTNode else_bran
     assert(condition != nullptr && if_branch != nullptr);
 }
 
+ASTNode IfStatement::normalized(ASTNode const &n) const
+{
+    n->init_namespace();
+    return make_node<IfStatement>(
+        n,
+        normalize(condition),
+        normalize(if_branch),
+        normalize(else_branch));
+}
+
 BindResult IfStatement::bind(ASTNode const &n) const
 {
     try_bind(condition);
@@ -120,6 +171,12 @@ LoopStatement::LoopStatement(Label label, ASTNode statement)
     assert(this->statement != nullptr);
 }
 
+ASTNode LoopStatement::normalized(ASTNode const &n) const
+{
+    n->init_namespace();
+    return make_node<LoopStatement>(n, label, normalize(statement));
+}
+
 BindResult LoopStatement::bind(ASTNode const &) const
 {
     return try_bind(statement);
@@ -128,6 +185,11 @@ BindResult LoopStatement::bind(ASTNode const &) const
 Return::Return(ASTNode expression)
     : expression(std::move(expression))
 {
+}
+
+ASTNode Return::normalized(ASTNode const &n) const
+{
+    return make_node<Return>(n, normalize(expression));
 }
 
 BindResult Return::bind(ASTNode const &n) const
@@ -164,6 +226,12 @@ WhileStatement::WhileStatement(Label label, ASTNode condition, ASTNode statement
     assert(this->condition != nullptr && this->statement != nullptr);
 }
 
+ASTNode WhileStatement::normalized(ASTNode const &n) const
+{
+    n->init_namespace();
+    return make_node<WhileStatement>(n, label, normalize(condition), normalize(statement));
+}
+
 BindResult WhileStatement::bind(ASTNode const &n) const
 {
     try_bind(condition);
@@ -178,6 +246,11 @@ Yield::Yield(Label label, ASTNode statement)
     : label(std::move(label))
     , statement(std::move(statement))
 {
+}
+
+ASTNode Yield::normalized(ASTNode const &n) const
+{
+    return make_node<Yield>(n, label, normalize(statement));
 }
 
 BindResult Yield::bind(ASTNode const &) const

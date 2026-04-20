@@ -24,6 +24,11 @@ Alias::Alias(std::wstring name, ASTNode aliased_type)
 {
 }
 
+ASTNode Alias::normalized(ASTNode const &n) const
+{
+    return make_node<Alias>(n, name, normalize(aliased_type));
+}
+
 BindResult Alias::bind(ASTNode const &n) const
 {
     Parser &parser { *n.repo };
@@ -42,6 +47,11 @@ Enum::Enum(std::wstring name, ASTNode underlying_type, ASTNodes values)
     , underlying_type(std::move(underlying_type))
     , values(std::move(values))
 {
+}
+
+ASTNode Enum::normalized(ASTNode const &n) const
+{
+    return make_node<Enum>(n, name, normalize(underlying_type), normalize(values));
 }
 
 BindResult Enum::bind(ASTNode const &n) const
@@ -130,6 +140,11 @@ EnumValue::EnumValue(std::wstring label, ASTNode value, ASTNode payload)
 {
 }
 
+ASTNode EnumValue::normalized(ASTNode const &n) const
+{
+    return make_node<EnumValue>(n, label, normalize(value), normalize(payload));
+}
+
 BindResult EnumValue::bind(ASTNode const &) const
 {
     return TypeRegistry::void_;
@@ -139,6 +154,11 @@ Struct::Struct(std::wstring name, ASTNodes members)
     : name(std::move(name))
     , members(std::move(members))
 {
+}
+
+ASTNode Struct::normalized(ASTNode const &n) const
+{
+    return make_node<Struct>(n, name, normalize(members));
 }
 
 BindResult Struct::bind(ASTNode const &n) const
@@ -159,6 +179,11 @@ StructMember::StructMember(std::wstring label, ASTNode type)
     , member_type(std::move(type))
 {
     assert(this->member_type != nullptr);
+}
+
+ASTNode StructMember::normalized(ASTNode const &n) const
+{
+    return make_node<StructMember>(n, label, normalize(member_type));
 }
 
 BindResult StructMember::bind(ASTNode const &) const
@@ -186,6 +211,45 @@ TagValue::TagValue(ASTNode operand, int64_t tag_value, std::wstring label, pType
 TypeSpecification::TypeSpecification(TypeSpecificationDescription description)
     : description(description)
 {
+}
+
+ASTNode TypeSpecification::normalized(ASTNode const &n) const
+{
+    auto normalized_description = std::visit(
+        overloads {
+            [](TypeNameNode const &d) -> TypeSpecificationDescription {
+                return TypeNameNode { d.name, normalize(d.arguments) };
+            },
+            [](ReferenceDescriptionNode const &d) -> TypeSpecificationDescription {
+                return ReferenceDescriptionNode { normalize(d.referencing) };
+            },
+            [](SliceDescriptionNode const &d) -> TypeSpecificationDescription {
+                return SliceDescriptionNode { normalize(d.slice_of) };
+            },
+            [](ZeroTerminatedArrayDescriptionNode const &d) -> TypeSpecificationDescription {
+                return ZeroTerminatedArrayDescriptionNode { normalize(d.array_of) };
+            },
+            [](ArrayDescriptionNode const &d) -> TypeSpecificationDescription {
+                return ArrayDescriptionNode { normalize(d.array_of), d.size };
+            },
+            [](DynArrayDescriptionNode const &d) -> TypeSpecificationDescription {
+                return DynArrayDescriptionNode { normalize(d.array_of) };
+            },
+            [](OptionalDescriptionNode const &d) -> TypeSpecificationDescription {
+                return OptionalDescriptionNode { normalize(d.optional_of) };
+            },
+            [](PointerDescriptionNode const &d) -> TypeSpecificationDescription {
+                return PointerDescriptionNode { normalize(d.referencing) };
+            },
+            [](ResultDescriptionNode const &d) -> TypeSpecificationDescription {
+                return ResultDescriptionNode {
+                    normalize(d.success),
+                    normalize(d.error),
+                };
+            },
+        },
+        description);
+    return make_node<TypeSpecification>(n, normalized_description);
 }
 
 BindResult TypeSpecification::bind(ASTNode const &n) const

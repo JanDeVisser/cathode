@@ -101,14 +101,12 @@ target_link_libraries(
 add_library(
     LiaLang
     STATIC
-    src/Lang/Bind.cpp
     src/Lang/Coerce.cpp
     src/Lang/Config.cpp
     src/Lang/Dump.cpp
     src/Lang/Fold.cpp
     src/Lang/Keyword.cpp
     src/Lang/Namespace.cpp
-    src/Lang/Normalize.cpp
     src/Lang/Operator.cpp
     src/Lang/Resolve.cpp
     src/Lang/Parser.cpp

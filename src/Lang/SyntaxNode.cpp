@@ -131,6 +131,104 @@ bool is_constant(ASTNode const &n)
         n->node);
 }
 
+ASTNode normalize(ASTNode node)
+{
+    if (node == nullptr) {
+        return nullptr;
+    }
+    auto &parser { *(node.repo) };
+    trace(L"[->N] {:t}", node);
+    ASTNode ret = node;
+    if (node->status < ASTStatus::Normalized) {
+        size_t stack_size { parser.namespaces.size() };
+        if (node->ns != nullptr) {
+            node->id.repo->push_namespace(node);
+        }
+        ret = std::visit(
+            [&node](auto const impl) {
+                return impl.normalized(node);
+            },
+            node->node);
+        while (parser.namespaces.size() > stack_size) {
+            ret.repo->pop_namespace(node);
+        }
+        if (ret != nullptr && ret->status < ASTStatus::Normalized) {
+            ret->status = ASTStatus::Normalized;
+        }
+    }
+    trace(L"[N->] {:t}", ret);
+    return ret;
+}
+
+ASTNodes normalize(ASTNodes nodes)
+{
+    ASTNodes normalized { };
+    std::ranges::for_each(
+        nodes,
+        [&normalized](auto const &n) {
+            auto ret = normalize(n);
+            if (ret != nullptr) {
+                normalized.push_back(ret);
+            }
+        });
+    return normalized;
+}
+
+BindResult bind(ASTNode node)
+{
+    assert(node != nullptr);
+    Parser &parser = *(node.repo);
+    assert(node->status >= ASTStatus::Normalized);
+    if (node->status == ASTStatus::Bound) {
+        return node->bound_type;
+    } else if (node->status > ASTStatus::Bound) {
+        return BindError { node->status };
+    } else { // node->status < ASTStatus::Bound) {
+        size_t stack_size = parser.namespaces.size();
+        if (node->ns != nullptr) {
+            parser.push_namespace(node);
+        }
+        parser.node_stack.emplace_back(node);
+        auto retval = std::visit(
+            [&node](auto const impl) {
+                auto id { node->id.id.value() };
+                return impl.bind(node);
+            },
+            node->node);
+        parser.node_stack.pop_back();
+        while (stack_size < parser.namespaces.size()) {
+            parser.pop_namespace(node);
+        }
+        if (retval.has_value()) {
+            auto const &type = retval.value();
+            if (type == nullptr) {
+                node->status = ASTStatus::Undetermined;
+                parser.unbound_nodes.push_back(node);
+                parser.unbound++;
+                return BindError { ASTStatus::Undetermined };
+            } else {
+                node->bound_type = type;
+                node->status = ASTStatus::Bound;
+                return type;
+            }
+        } else {
+            switch (retval.error()) {
+            case ASTStatus::InternalError:
+                dump(node, std::wcerr);
+                assert("bind(): Internal error" == nullptr);
+                break;
+            case ASTStatus::Undetermined:
+                parser.unbound_nodes.push_back(node);
+                parser.unbound++;
+                /* Fallthrough */
+            default:
+                node->status = retval.error();
+                break;
+            }
+            return retval;
+        }
+    }
+}
 }
 
 std::wostream &operator<<(std::wostream &os, Lang::ASTNode const &node)

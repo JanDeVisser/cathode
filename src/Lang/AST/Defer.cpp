@@ -23,6 +23,11 @@ DeferStatement::DeferStatement(ASTNode statement)
 {
 }
 
+ASTNode DeferStatement::normalized(ASTNode const &n) const
+{
+    return make_node<DeferStatement>(n, normalize(statement));
+}
+
 BindResult DeferStatement::bind(ASTNode const &) const
 {
     try_bind(statement);

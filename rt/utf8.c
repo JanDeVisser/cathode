@@ -10,7 +10,7 @@
 #include <string.h>
 #include <wchar.h>
 
-#include <rt/lia.h>
+#include <rt/cathode.h>
 
 size_t utf32_length_for_utf8_slice(slice_t slice)
 {

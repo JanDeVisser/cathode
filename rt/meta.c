@@ -10,9 +10,9 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include <rt/lia.h>
+#include <rt/cathode.h>
 
-int lia$enum_tag(enum_def_t *enum_def, uint64_t value, slice_t *ret)
+int cathode$enum_tag(enum_def_t *enum_def, uint64_t value, slice_t *ret)
 {
     uint64_t str_offset = 0;
     int64_t  str_len = 0;
@@ -24,7 +24,7 @@ int lia$enum_tag(enum_def_t *enum_def, uint64_t value, slice_t *ret)
         str_offset += (enum_def->values[ix].tag_len + 1) * sizeof(wchar_t);
     }
     if (str_len == 0) {
-        lia$abort(L"Invalid enum value", 18);
+        cathode$abort(L"Invalid enum value", 18);
     }
 
     uint8_t *ptr = ((uint8_t *) enum_def) + sizeof(uint64_t) + enum_def->num_values * (sizeof(int64_t) + sizeof(uint64_t)) + str_offset;

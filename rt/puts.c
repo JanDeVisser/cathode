@@ -10,12 +10,12 @@
 #include <unistd.h>
 #include <wchar.h>
 
-#include <rt/lia.h>
+#include <rt/cathode.h>
 
 static slice_t to_string_int64(slice_t dest, int64_t i, int radix);
 static slice_t to_string_uint64(slice_t dest, uint64_t i, int radix);
 
-size_t lia$fputs(int fd, wchar_t const *ptr, int64_t len)
+size_t cathode$fputs(int fd, wchar_t const *ptr, int64_t len)
 {
     slice_t utf8 = to_utf8((slice_t) { (void *) ptr, len });
     size_t  ret = write(fd, utf8.ptr, utf8.size);
@@ -23,62 +23,62 @@ size_t lia$fputs(int fd, wchar_t const *ptr, int64_t len)
     return ret;
 }
 
-size_t lia$fendln(int fd)
+size_t cathode$fendln(int fd)
 {
     return write(fd, "\n", 1);
 }
 
-size_t lia$fputln(int fd, wchar_t const *ptr, int64_t len)
+size_t cathode$fputln(int fd, wchar_t const *ptr, int64_t len)
 {
-    size_t ret = lia$fputs(fd, ptr, len);
-    ret += lia$fendln(fd);
+    size_t ret = cathode$fputs(fd, ptr, len);
+    ret += cathode$fendln(fd);
     return ret;
 }
 
-size_t lia$puts(wchar_t const *ptr, int64_t len)
+size_t cathode$puts(wchar_t const *ptr, int64_t len)
 {
-    return lia$fputs(1, ptr, len);
+    return cathode$fputs(1, ptr, len);
 }
 
-size_t lia$eputs(wchar_t const *ptr, int64_t len)
+size_t cathode$eputs(wchar_t const *ptr, int64_t len)
 {
-    return lia$fputs(2, ptr, len);
+    return cathode$fputs(2, ptr, len);
 }
 
-size_t lia$endln()
+size_t cathode$endln(void)
 {
-    return lia$fendln(1);
+    return cathode$fendln(1);
 }
 
-size_t lia$putln(wchar_t const *ptr, int64_t len)
+size_t cathode$putln(wchar_t const *ptr, int64_t len)
 {
-    size_t ret = lia$puts(ptr, len);
-    ret += lia$endln();
+    size_t ret = cathode$puts(ptr, len);
+    ret += cathode$endln();
     return ret;
 }
 
-size_t lia$eputln(wchar_t const *ptr, int64_t len)
+size_t cathode$eputln(wchar_t const *ptr, int64_t len)
 {
-    size_t ret = lia$eputs(ptr, len);
-    ret += lia$fendln(2);
+    size_t ret = cathode$eputs(ptr, len);
+    ret += cathode$fendln(2);
     return ret;
 }
 
-[[noreturn]] void lia$abort(wchar_t const *ptr, int64_t len)
+[[noreturn]] void cathode$abort(wchar_t const *ptr, int64_t len)
 {
-    lia$eputln(ptr, len);
+    cathode$eputln(ptr, len);
     close(2);
     abort();
 }
 
-void lia$assert(bool assertion, wchar_t const *ptr, int64_t len)
+void cathode$assert(bool assertion, wchar_t const *ptr, int64_t len)
 {
     if (!assertion) {
-        lia$abort(ptr, len);
+        cathode$abort(ptr, len);
     }
 }
 
-size_t lia$putint(int64_t i)
+size_t cathode$putint(int64_t i)
 {
     wchar_t buf[32];
     slice_t str = to_string_int64((slice_t) { buf, 32 }, i, 10);
@@ -88,7 +88,7 @@ size_t lia$putint(int64_t i)
     return write(1, str.ptr, str.size);
 }
 
-size_t lia$putuint(uint64_t i)
+size_t cathode$putuint(uint64_t i)
 {
     wchar_t buf[32];
     slice_t str = to_string_uint64((slice_t) { buf, 32 }, i, 10);

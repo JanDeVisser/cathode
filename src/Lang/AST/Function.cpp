@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <Util/Enumerate.h>
 #include <Util/StringUtil.h>
 #include <Util/Utf8.h>
 
@@ -172,7 +173,7 @@ BindResult Call::bind(ASTNode const &n) const
             }
             ASTNodes reference_nodes;
             auto     made_reference_node { false };
-            for (auto [ix, arg_param] : std::views::zip(args, type_descr.types, func_params_descr.types) | std::ranges::views::enumerate) {
+            for (auto [ix, arg_param] : std::views::zip(args, type_descr.types, func_params_descr.types) | enumerate) {
                 auto [arg, arg_type, param_type] { arg_param };
                 auto arg_value = arg_type->value_type();
                 auto param_value = param_type->value_type();

@@ -1,7 +1,7 @@
 import raylib
 
 export func main() i32 {
-    raylib.InitWindow(800::i32, 600::i32, `Lia Speedrun`)
+    raylib.InitWindow(800::i32, 600::i32, `Cathode Speedrun`)
     raylib.SetTargetFPS(60::i32);
     while (!raylib.WindowShouldClose()) {
         raylib.BeginDrawing()
@@ -11,4 +11,3 @@ export func main() i32 {
     raylib.CloseWindow()
     return 0::i32
 }
-

@@ -98,7 +98,7 @@ DLResult<LibHandle> Resolver::Library::try_open(fs::path const &dir) const
         trace("Successfully opened '{}'", (p) ? p : "main program module");
         return LibHandle { lib_handle };
     }
-    return std::unexpected<DLError>(std::in_place_t {});
+    return std::unexpected<DLError>(std::in_place_t { });
 }
 
 DLResult<LibHandle> Resolver::Library::open()
@@ -109,22 +109,22 @@ DLResult<LibHandle> Resolver::Library::open()
     } else {
         trace("resolve_open('Main Program Image')");
     }
-    DLResult<LibHandle> ret { std::unexpected<DLError>(std::in_place_t {}) };
+    DLResult<LibHandle> ret { std::unexpected<DLError>(std::in_place_t { }) };
     m_handle = nullptr;
     if (!m_image.empty()) {
-        fs::path lia_dir { getenv("LIA_DIR") ? getenv("LIA_DIR") : LIA_APPDIR };
-        if (lia_dir.empty()) {
-            lia_dir = "/usr/share/lia";
+        fs::path cathode_dir { getenv("CATHODE_DIR") ? getenv("CATHODE_DIR") : CATHODE_APPDIR };
+        if (cathode_dir.empty()) {
+            cathode_dir = "/usr/share/cathode";
         }
-        ret = try_open(lia_dir / "lib");
+        ret = try_open(cathode_dir / "lib");
         if (!ret.has_value()) {
-            ret = try_open(lia_dir / "bin");
-        }
-        if (!ret.has_value()) {
-            ret = try_open(lia_dir);
+            ret = try_open(cathode_dir / "bin");
         }
         if (!ret.has_value()) {
-            ret = try_open(lia_dir / "share/lib");
+            ret = try_open(cathode_dir);
+        }
+        if (!ret.has_value()) {
+            ret = try_open(cathode_dir / "share/lib");
         }
         if (!ret.has_value()) {
             ret = try_open(fs::path { "lib" });
@@ -155,7 +155,7 @@ DLResult<LibHandle> Resolver::Library::open()
     if (ret.has_value()) {
         m_handle = ret.value();
         if (!image.empty()) {
-            auto result = get_function(LIA_INIT);
+            auto result = get_function(CATHODE_INIT);
             if (result.has_value()) {
                 if (auto func_ptr = result.value(); func_ptr != nullptr) {
                     trace("resolve_open('{}') Executing initializer", to_string());

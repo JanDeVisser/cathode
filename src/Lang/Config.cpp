@@ -17,17 +17,17 @@ namespace Lang {
 using namespace Util;
 namespace fs = std::filesystem;
 
-fs::path lia_dir()
+fs::path cathode_dir()
 {
-    fs::path liadir { getenv("LIA_DIR") ? getenv("LIA_DIR") : LIA_APPDIR };
-    if (liadir.empty()) {
-        liadir = "/usr/share/lia";
+    fs::path cathodedir { getenv("CATHODE_DIR") ? getenv("CATHODE_DIR") : CATHODE_APPDIR };
+    if (cathodedir.empty()) {
+        cathodedir = "/usr/share/cathode";
     }
-    auto std_lia { liadir / "share" / "std.lia" };
-    if (!fs::exists(std_lia)) {
-        fatal("{} not found", std_lia.string());
+    auto std_cathode { cathodedir / "share" / "std.cth" };
+    if (!fs::exists(std_cathode)) {
+        fatal("{} not found", std_cathode.string());
     }
-    return liadir;
+    return cathodedir;
 }
 
 }

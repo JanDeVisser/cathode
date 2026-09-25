@@ -8,7 +8,7 @@
 #include <concepts>
 #include <cstdint>
 
-#include <rt/lia.h>
+#include <rt/cathode.h>
 
 #include <Util/Logging.h>
 #include <Util/StringUtil.h>

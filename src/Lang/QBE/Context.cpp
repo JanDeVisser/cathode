@@ -5,19 +5,19 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <ranges>
 #include <sstream>
 
 #include <Lang/Parser.h>
 #include <Lang/QBE/QBE.h>
 #include <Lang/Type.h>
+#include <Util/Enumerate.h>
 
 namespace Lang::QBE {
 
 ILValue QBEContext::add_string(std::wstring_view s)
 {
     auto &file { program.files[current_file] };
-    for (auto const &[ix, str] : std::ranges::views::enumerate(file.strings)) {
+    for (auto const &[ix, str] : enumerate(file.strings)) {
         if (str == s) {
             return ILValue::string(ix);
         }
@@ -29,7 +29,7 @@ ILValue QBEContext::add_string(std::wstring_view s)
 ILValue QBEContext::add_cstring(std::string_view s)
 {
     auto &file { program.files[current_file] };
-    for (auto const &[ix, str] : std::ranges::views::enumerate(file.cstrings)) {
+    for (auto const &[ix, str] : enumerate(file.cstrings)) {
         if (str == s) {
             return ILValue::cstring(ix);
         }
@@ -42,7 +42,7 @@ ILValue QBEContext::add_enumeration(pType const &enum_type)
 {
     auto &file { program.files[current_file] };
     auto  found { false };
-    for (auto const &[ix, e] : std::ranges::views::enumerate(file.enumerations)) {
+    for (auto const &[ix, e] : enumerate(file.enumerations)) {
         if (e == enum_type) {
             return ILValue::global(std::format(L"enum$_{}", ix + 1), ILBaseType::L);
         }
@@ -113,7 +113,7 @@ void QBEContext::add_operation(ILInstructionImpl impl)
         function.labels[n][static_cast<int>(label_def.label.type)] = function.instructions.size();
         // auto const &l { function.labels[n] };
         // trace(L"Added label {}. Labels:", label_def.label);
-        // for (auto const &[ix, l] : function.labels | std::ranges::views::enumerate) {
+        // for (auto const &[ix, l] : function.labels | enumerate) {
         //     if (std::ranges::all_of(l, [](size_t ip) { return ip == 0; })) {
         //         continue;
         //     }

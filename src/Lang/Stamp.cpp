@@ -60,7 +60,7 @@ ASTNode stamp(ASTNode n, DeferStatement &impl)
 template<>
 ASTNode stamp(ASTNode n, Enum &impl)
 {
-    ASTNodes vals {};
+    ASTNodes vals { };
     for (auto const &v : impl.values) {
         vals.emplace_back(stamp(v));
     }

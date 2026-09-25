@@ -18,8 +18,8 @@ namespace Util {
 
 namespace fs = std::filesystem;
 
-constexpr static auto const *LIA_DIR = "LIA_DIR";
-constexpr static auto const *LIA_INIT = "_lia_init";
+constexpr static auto const *CATHODE_DIR = "CATHODE_DIR";
+constexpr static auto const *CATHODE_INIT = "_cathode_init";
 
 typedef void (*void_t)();
 
@@ -37,7 +37,7 @@ struct LibHandle {
 };
 
 struct DLError {
-    std::string message {};
+    std::string message { };
     DLError() = default;
     DLError(char const *m);
     DLError(std::string m);
@@ -69,9 +69,9 @@ private:
         [[nodiscard]] DLResult<LibHandle> try_open(fs::path const &) const;
 
         LibHandle                     m_handle { nullptr };
-        std::string                   m_image {};
+        std::string                   m_image { };
         DLError                       m_my_result;
-        std::map<std::string, void_t> m_functions {};
+        std::map<std::string, void_t> m_functions { };
         friend Resolver;
     };
 

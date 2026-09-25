@@ -10,6 +10,7 @@
 #include <variant>
 
 #include <Util/Align.h>
+#include <Util/Enumerate.h>
 #include <Util/Logging.h>
 #include <Util/Options.h>
 #include <Util/Pipe.h>
@@ -73,7 +74,7 @@ intptr_t raw_assign(ILValue const &lhs, ILValue const &rhs, StructType const &st
                 ILValue  prev_lhs;
                 auto     prev_size { 0 };
                 intptr_t total_size { 0 };
-                for (auto const &[ix, value] : std::ranges::views::enumerate(values)) {
+                for (auto const &[ix, value] : enumerate(values)) {
                     auto const &fld { strukt.fields[ix] };
                     if (prev_size > 0) {
                         lhs_ptr = ILValue::pointer(++ctx.next_var);

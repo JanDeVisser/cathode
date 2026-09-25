@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-#ifndef __LIA_H__
-#define __LIA_H__
+#ifndef __CATHODE_H__
+#define __CATHODE_H__
 
 #include <assert.h>
 #include <stdint.h>
@@ -52,19 +52,19 @@ slice_t     to_utf32(slice_t utf8);
 slice_t     cstring_to_string(char const *cstring);
 char const *string_to_cstring(slice_t string);
 
-extern size_t            lia$fputs(int fd, wchar_t const *ptr, int64_t len);
-extern size_t            lia$fendln(int fd);
-extern size_t            lia$fputln(int fd, wchar_t const *ptr, int64_t len);
-extern size_t            lia$puts(wchar_t const *ptr, int64_t len);
-extern size_t            lia$endln();
-extern size_t            lia$putln(wchar_t const *ptr, int64_t len);
-extern size_t            lia$eputs(wchar_t const *ptr, int64_t len);
-extern size_t            lia$eputln(wchar_t const *ptr, int64_t len);
-extern void              lia$assert(bool assertion, wchar_t const *ptr, int64_t len);
-[[noreturn]] extern void lia$abort(wchar_t const *ptr, int64_t len);
-extern size_t            lia$putint(int64_t i);
-extern size_t            lia$putuint(uint64_t i);
-extern int               lia$enum_tag(enum_def_t *enum_def, uint64_t value, slice_t *ret);
+extern size_t            cathode$fputs(int fd, wchar_t const *ptr, int64_t len);
+extern size_t            cathode$fendln(int fd);
+extern size_t            cathode$fputln(int fd, wchar_t const *ptr, int64_t len);
+extern size_t            cathode$puts(wchar_t const *ptr, int64_t len);
+extern size_t            cathode$endln();
+extern size_t            cathode$putln(wchar_t const *ptr, int64_t len);
+extern size_t            cathode$eputs(wchar_t const *ptr, int64_t len);
+extern size_t            cathode$eputln(wchar_t const *ptr, int64_t len);
+extern void              cathode$assert(bool assertion, wchar_t const *ptr, int64_t len);
+[[noreturn]] extern void cathode$abort(wchar_t const *ptr, int64_t len);
+extern size_t            cathode$putint(int64_t i);
+extern size_t            cathode$putuint(uint64_t i);
+extern int               cathode$enum_tag(enum_def_t *enum_def, uint64_t value, slice_t *ret);
 
 #define ALIGNAT(bytes, align) ((bytes + (align - 1)) & ~(align - 1))
 #define AS_SLICE(dynarr) (*(slice_t *) (&dynarr))
@@ -73,4 +73,4 @@ extern int               lia$enum_tag(enum_def_t *enum_def, uint64_t value, slic
 }
 #endif
 
-#endif /* __LIA_H__ */
+#endif /* __CATHODE_H__ */

@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <ranges>
 #include <variant>
 
 #include <Lang/Parser.h>
 #include <Lang/QBE/QBE.h>
 #include <Lang/Type.h>
+#include <Util/Enumerate.h>
 
 namespace Lang::QBE {
 
@@ -24,7 +24,7 @@ std::wostream &operator<<(std::wostream &os, ILFunction const &function)
     }
     os << " $" << function.name << '(';
     auto first = true;
-    for (auto const &[ix, param] : std::ranges::views::enumerate(function.parameters)) {
+    for (auto const &[ix, param] : enumerate(function.parameters)) {
         if (!first) {
             os << ", ";
         }

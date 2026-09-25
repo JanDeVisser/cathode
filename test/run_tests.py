@@ -9,7 +9,6 @@ import os
 import re
 import shutil
 import subprocess
-
 import sys
 
 
@@ -42,11 +41,11 @@ def test_compile(name, script):
     with open("stdout", "w+") as out, open("stderr", "w+") as err:
         # cmdline = [os.path.join(".compiled", name)]
         cmdline = [
-            "../build/bin/lia",
+            "../build/bin/cathode",
             "--list",
             "--keep-assembly",
             "compile",
-            name + ".lia",
+            name + ".cth",
         ]
         ex = subprocess.call(cmdline, stdout=out, stderr=err)
         out.seek(0)
@@ -102,7 +101,7 @@ def test_compile(name, script):
 def test_eval(name, script):
     with open("stdout", "w+") as out, open("stderr", "w+") as err:
         # cmdline = [os.path.join(".compiled", name)]
-        cmdline = ["../build/bin/lia", "eval", f"{name}.lia"]
+        cmdline = ["../build/bin/cathode", "eval", f"{name}.cth"]
         cmdline.extend(script["args"])
         ex = subprocess.call(cmdline, stdout=out, stderr=err)
         out.seek(0)
@@ -132,7 +131,7 @@ def test_eval(name, script):
 
 
 def test_script(name):
-    if name.endswith(".lia"):
+    if name.endswith(".cth"):
         name = name[:-4]
 
     with open(name + ".json") as fd:
@@ -174,7 +173,7 @@ def run_all_tests(break_on_failure):
 
 
 def config_test(name, *args):
-    if name.endswith(".lia"):
+    if name.endswith(".cth"):
         name = name[:-4]
     # name = compile_script(name)
     if name is None:
@@ -182,7 +181,7 @@ def config_test(name, *args):
     script = {"name": name}
 
     with open("stdout", "w+") as out, open("stderr", "w+") as err:
-        cmdline = ["../build/bin/lia", "compile", name + ".lia"]
+        cmdline = ["../build/bin/cathode", "compile", name + ".cth"]
         ex = subprocess.call(cmdline, stdout=out, stderr=err)
         out.seek(0)
         err.seek(0)
@@ -266,7 +265,7 @@ def initialize():
 initialize()
 
 arg_parser = argparse.ArgumentParser(
-    prog="run_tests", description="lia language test runner"
+    prog="run_tests", description="cathode language test runner"
 )
 
 subparsers = arg_parser.add_subparsers(

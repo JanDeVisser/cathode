@@ -60,9 +60,9 @@ ASTNode Import::normalized(ASTNode const &n) const
     for (auto const &elem : file_name) {
         path += elem;
     }
-    path.concat(".lia");
+    path.concat(".cth");
     if (!fs::exists(path)) {
-        path = lia_dir() / "share" / path;
+        path = cathode_dir() / "share" / path;
     }
     Parser &parser { *(n.repo) };
 

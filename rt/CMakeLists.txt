@@ -10,17 +10,17 @@ add_library(
 )
 
 add_library(
-        liart
-        STATIC SHARED
+        cathodert
+        SHARED
         dynarr.c
         meta.c
         puts.c
         utf8.c
 )
 
-set_target_properties(liart PROPERTIES LINKER_LANGUAGE C)
+set_target_properties(cathodert PROPERTIES LINKER_LANGUAGE C)
 
-install(TARGETS liart trampoline
+install(TARGETS cathodert trampoline
         ARCHIVE DESTINATION lib
         RUNTIME DESTINATION bin
         LIBRARY DESTINATION lib)

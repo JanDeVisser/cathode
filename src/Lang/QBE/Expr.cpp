@@ -73,7 +73,7 @@ static void check_division_by_zero(QBEOperand const &rhs, QBEContext &ctx)
 {
     auto cmp_zero { ILValue::local(++ctx.next_var, ILBaseType::W) };
     ctx += ExprDef { ILValue::integer(0, rhs.get_value().type), rhs.get_value(), ILOperation::NotEqual, cmp_zero },
-        CallDef { L"libliart:lia$assert", ILValue::null(), { cmp_zero, ctx.add_string(division_by_zero), ILValue::integer(wcslen(division_by_zero), ILBaseType::L) } },
+        CallDef { L"libcathodert:cathode$assert", ILValue::null(), { cmp_zero, ctx.add_string(division_by_zero), ILValue::integer(wcslen(division_by_zero), ILBaseType::L) } },
         LabelDef { LabelType::End, rhs.node };
 }
 
@@ -118,7 +118,7 @@ static void optional_must(QBEOperand const &val, OptionalType const &optional, Q
 {
     check_optional(val, optional, QBELabel { LabelType::Top, val.node }, { LabelType::Else, val.node }, ctx);
     ctx += LabelDef { LabelType::Top, val.node },
-        CallDef { L"libliart:lia$abort", ILValue::null(), { ctx.add_string(empty_optional), ILValue::integer(wcslen(empty_optional), ILBaseType::L) } },
+        CallDef { L"libcathodert:cathode$abort", ILValue::null(), { ctx.add_string(empty_optional), ILValue::integer(wcslen(empty_optional), ILBaseType::L) } },
         LabelDef { LabelType::Else, val.node };
 }
 
@@ -126,7 +126,7 @@ static void result_must(bool success, QBEOperand const &val, ResultType const &r
 {
     check_result(success, val, result, QBELabel { LabelType::Else, val.node }, QBELabel { LabelType::End, val.node }, ctx);
     ctx += LabelDef { LabelType::Else, val.node },
-        CallDef { L"libliart:lia$abort", ILValue::null(), { ctx.add_string((success) ? result_error : result_success), ILValue::integer(wcslen(empty_optional), ILBaseType::L) } },
+        CallDef { L"libcathodert:cathode$abort", ILValue::null(), { ctx.add_string((success) ? result_error : result_success), ILValue::integer(wcslen(empty_optional), ILBaseType::L) } },
         LabelDef { LabelType::End, val.node };
 }
 
@@ -138,7 +138,7 @@ static void tagged_union_must(QBEOperand const &val, TaggedUnionType const &tagg
     auto const &tag_value { get<TagValue>(val.node) };
     check_tagged_union(tag_value.tag_value, val, tagged_union, abort_mission, carry_on, ctx);
     ctx += LabelDef { abort_mission },
-        CallDef { L"libliart:lia$abort", ILValue::null(), { ctx.add_string(wrong_tagged_value), ILValue::integer(wcslen(empty_optional), ILBaseType::L) } },
+        CallDef { L"libcathodert:cathode$abort", ILValue::null(), { ctx.add_string(wrong_tagged_value), ILValue::integer(wcslen(empty_optional), ILBaseType::L) } },
         LabelDef { carry_on };
 }
 
@@ -473,7 +473,7 @@ GenResult qbe_operator(QBEUnaryExpr const &expr, EnumType const &, QBEContext &c
         auto tag_buffer { ILValue::local(++ctx.next_var, ILBaseType::L) };
         auto ret_val = ILValue::local(++ctx.next_var, ILBaseType::W);
         ctx += AllocDef { 16, 16, tag_buffer },
-            CallDef { L"libliart:lia$enum_tag", ret_val, { enum_def, operand, tag_buffer } };
+            CallDef { L"libcathodert:cathode$enum_tag", ret_val, { enum_def, operand, tag_buffer } };
         tag_buffer.type = ctx.qbe_type(TypeRegistry::string);
         return QBEOperand { expr.node, tag_buffer };
     }

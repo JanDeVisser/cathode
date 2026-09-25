@@ -8,6 +8,7 @@
 #include <iostream>
 #include <locale.h>
 #include <optional>
+#include <print>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -59,7 +60,7 @@ std::optional<std::wstring> load_directory(fs::path directory)
 {
     std::wstring ret;
     for (auto const &entry : fs::directory_iterator(directory)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".lia") {
+        if (entry.is_regular_file() && entry.path().extension() == ".cth") {
             if (auto contents_maybe = load_file(entry.path()); !contents_maybe) {
                 return { };
             } else {
@@ -280,7 +281,7 @@ private:
     }
 
     Builder(fs::path root)
-        : app_dir(lia_dir())
+        : app_dir(cathode_dir())
         , source(std::move(root))
         , program_name(root.stem().string())
         , verbose(log_config.level == LogLevel::Trace)
@@ -288,16 +289,20 @@ private:
     }
 
     Builder(std::vector<fs::path> source)
-        : app_dir(lia_dir())
+        : app_dir(cathode_dir())
         , source(std::move(source))
-        , program_name(({ auto const &__s = std::get<1>(this->source); assert(!__s.empty()); __s[0].stem().string(); }))
+        , program_name(({
+            auto const &__s = std::get<1>(this->source);
+            assert(!__s.empty());
+            __s[0].stem().string();
+        }))
         , verbose(log_config.level == LogLevel::Trace)
     {
     }
 
     std::optional<std::wstring> load_std_lib()
     {
-        return load_file(fs::path { lia_dir() / "share" / "std.lia" });
+        return load_file(fs::path { cathode_dir() / "share" / "std.cth" });
     }
 
     template<typename T>
@@ -314,20 +319,20 @@ std::optional<Builder> make_builder(T source)
 
 void usage()
 {
-    std::cout << "lia - lia language compiler  https://www.lia-lang.org\n\n";
+    std::cout << "cathode - cathode language compiler  https://www.cathode-lang.org\n\n";
     std::cout << "Usage:\n";
-    std::cout << "   lia help | usage | --help, -h - This text\n";
-    std::cout << "   lia [OPTIONS] build [-- <arg>...]\n";
-    std::cout << "   lia [OPTIONS] compile <file> ... [-- <arg> ...]\n";
-    std::cout << "   lia [OPTIONS] eval <file> ... [-- <arg> ...]\n";
-    std::cout << "   lia [OPTIONS] debug - Start debugger\n\n";
-    std::cout << "   lia version | --version | -v - Display version\n\n";
+    std::cout << "   cathode help | usage | --help, -h - This text\n";
+    std::cout << "   cathode [OPTIONS] build [-- <arg>...]\n";
+    std::cout << "   cathode [OPTIONS] compile <file> ... [-- <arg> ...]\n";
+    std::cout << "   cathode [OPTIONS] eval <file> ... [-- <arg> ...]\n";
+    std::cout << "   cathode [OPTIONS] debug - Start debugger\n\n";
+    std::cout << "   cathode version | --version | -v - Display version\n\n";
     std::cout << "Options:\n";
     std::cout << "  --keep-assembly       Do not delete assembly files after compiling\n";
     std::cout << "  --keep-objects        Do not delete object files after linking\n";
-    std::cout << "  --list                Write intermediate representation to .lia/<program>.ir\n";
+    std::cout << "  --list                Write intermediate representation to .cth/<program>.ir\n";
     std::cout << "  --run                 Run the executable build with `build` or `compile`\n";
-    std::cout << "                        Pass the command line arguments specified after `--`";
+    std::cout << "                        Pass the command line arguments specified after `--`\n";
     std::cout << "  --stop-after-analysis Stop after semantic analysis\n";
     std::cout << "  --stop-after-parse    Stop after syntactic parsing\n";
     std::cout << "  --trace               Print debug tracing information\n";
@@ -339,8 +344,8 @@ void usage()
 
 void version()
 {
-    std::print(std::cout, "lia {} {} {}\n",
-        LIA_VERSION, LIA_SYSTEM, LIA_SYSTEM_VERSION, LIA_CPU, LIA_COMPILER);
+    std::print(std::cout, "cathode {} {} {}\n",
+        CATHODE_VERSION, CATHODE_SYSTEM, CATHODE_SYSTEM_VERSION, CATHODE_CPU, CATHODE_COMPILER);
     exit(0);
 }
 
@@ -372,7 +377,7 @@ int main(int argc, char const **argv)
         }
     } else if (strcmp(argv[arg_ix], "compile") == 0 && argc - arg_ix > 1) {
         std::vector<fs::path> files;
-        for (size_t ix = arg_ix + 1; ix < argc; ++ix) {
+        for (int ix = arg_ix + 1; ix < argc; ++ix) {
             files.emplace_back(argv[ix]);
         }
         if (auto builder_maybe = make_builder(files); builder_maybe) {

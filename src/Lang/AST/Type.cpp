@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <Util/Enumerate.h>
 #include <Util/StringUtil.h>
 #include <Util/Utf8.h>
 
@@ -107,7 +108,7 @@ BindResult Enum::bind(ASTNode const &n) const
         enum_type = make_type(std::format(L"$enum${}", name), enoom);
     }
     TaggedUnionType tagged_union;
-    for (auto const &[ix, v] : std::ranges::views::enumerate(values)) {
+    for (auto const &[ix, v] : enumerate(values)) {
         pType payload { TypeRegistry::void_ };
         auto  tagged_value = get<EnumValue>(v);
         if (tagged_value.payload != nullptr) {

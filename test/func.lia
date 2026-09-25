@@ -1,7 +1,0 @@
-func foo(x: i32) i32 {
-     return x * 2::i32
-}
-
-func main() i32 {
-    foo(12::i32)
-}

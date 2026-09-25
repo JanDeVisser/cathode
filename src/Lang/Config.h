@@ -12,6 +12,6 @@ namespace Lang {
 
 namespace fs = std::filesystem;
 
-fs::path lia_dir();
+fs::path cathode_dir();
 
 }

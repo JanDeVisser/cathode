@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <ranges>
-
+#include <Util/Enumerate.h>
 #include <Util/Logging.h>
 #include <Util/Utf8.h>
 
@@ -73,10 +72,9 @@ Namespace::NSEntries Namespace::all(std::wstring const &name) const
             ret.insert_range(ret.end(), proxy.module->ns->all(name));
         }
     }
-    if (auto it { entries.find(name) }; it != entries.end()) {
-        for (; std::get<std::wstring const>(*it) == name; ++it) {
-            ret.emplace_back(std::get<Namespace::NSEntry>(*it));
-        }
+    auto [first, last] = entries.equal_range(name);
+    for (auto it = first; it != last; ++it) {
+        ret.emplace_back(it->second);
     }
     if (parent != nullptr) {
         ret.insert_range(ret.end(), parent->all(name));
@@ -202,7 +200,7 @@ ASTNodes Namespace::find_functions(std::wstring const &name) const
 {
     ASTNodes ret { };
     std::ranges::for_each(
-        all(name) | std::ranges::views::enumerate,
+        all(name) | enumerate,
         [&ret](auto const &t) {
             auto const &[ix, e] = t;
             if (e.index() == Namespace::Function) {

@@ -5,9 +5,9 @@
  */
 
 #include <cstdint>
-#include <ranges>
 
 #include <Util/Align.h>
+#include <Util/Enumerate.h>
 
 #include <Lang/Parser.h>
 #include <Lang/QBE/QBE.h>
@@ -367,15 +367,15 @@ void VM::dump_globals() const
 void Frame::dump_frame() const
 {
     trace("  Variables:");
-    for (auto const &[ix, val] : variables | std::ranges::views::enumerate) {
+    for (auto const &[ix, val] : variables | enumerate) {
         trace(L"    {}: {:tx}", ix, val);
     }
     trace("  Locals:");
-    for (auto const &[ix, l] : locals | std::ranges::views::enumerate) {
+    for (auto const &[ix, l] : locals | enumerate) {
         trace(L"    {}: {:tx}", ix, l);
     }
     trace("  Temporaries:");
-    for (auto const &[ix, l] : temporaries | std::ranges::views::enumerate) {
+    for (auto const &[ix, l] : temporaries | enumerate) {
         trace(L"    {}: {:tx}", ix, l);
     }
     vm.dump_stack();
@@ -522,19 +522,19 @@ ExecResult execute(ILFunction const &, pFrame const &frame, ExprDef const &instr
     auto lhs = get(frame, instruction.lhs);
     auto rhs = get(frame, instruction.rhs);
 
-    Operator lia_op;
+    Operator cathode_op;
     switch (instruction.op) {
 #undef S
-#define S(Op, Str, LangOp) \
-    case ILOperation::Op: \
-        lia_op = LangOp;   \
+#define S(Op, Str, LangOp)   \
+    case ILOperation::Op:    \
+        cathode_op = LangOp; \
         break;
         ILOPERATIONS(S)
 #undef S
     default:
         UNREACHABLE();
     }
-    auto v = evaluate(lhs, lia_op, rhs);
+    auto v = evaluate(lhs, cathode_op, rhs);
     assign(frame, instruction.target, v);
     ++frame->ip;
     return instruction.target;
@@ -664,13 +664,13 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
 {
     auto frame { vm.new_frame(file, function) };
     frame->arguments.resize(function.parameters.size());
-    for (auto const &[ix, arg] : std::ranges::views::enumerate(args)) {
+    for (auto const &[ix, arg] : enumerate(args)) {
         std::wstring name;
         name = function.parameters[ix].name;
         frame->arguments[ix] = arg;
     }
     trace("  Global Base  = 0x{:016x}", reinterpret_cast<intptr_t>(vm.data.data()));
-    for (auto const &[ix, global] : std::ranges::views::enumerate(file.globals)) {
+    for (auto const &[ix, global] : enumerate(file.globals)) {
         if (!vm.globals[file.id].contains(global.name)) {
             assert((vm.data_pointer + global.type->size_of()) <= VM::STACK_SIZE);
             QBEValue val { vm.data.data() + vm.data_pointer };
@@ -683,7 +683,7 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
             vm.globals[file.id][global.name] = val;
         }
     }
-    for (auto const &[ix, s] : std::ranges::views::enumerate(file.strings)) {
+    for (auto const &[ix, s] : enumerate(file.strings)) {
         auto n { std::format(L"str_{}", ix) };
         if (!vm.globals[file.id].contains(n)) {
             assert((vm.data_pointer + (s.length() + 1) * sizeof(wchar_t)) <= VM::STACK_SIZE);
@@ -698,7 +698,7 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
             vm.globals[file.id][n] = val;
         }
     }
-    for (auto const &[ix, s] : std::ranges::views::enumerate(file.cstrings)) {
+    for (auto const &[ix, s] : enumerate(file.cstrings)) {
         auto n { std::format(L"cstr_{}", ix) };
         if (!vm.globals[file.id].contains(n)) {
             assert((vm.data_pointer + s.length() + 1) <= VM::STACK_SIZE);
@@ -714,7 +714,7 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
         }
     }
     std::ranges::for_each(
-        file.enumerations | std::views::enumerate,
+        file.enumerations | enumerate,
         [&vm, &file](auto const &tuple) {
             auto const &[ix, enum_type] = tuple;
             auto            n = std::format(L"enum$_{}", ix + 1);
@@ -782,7 +782,7 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
     trace("Frame status after setup:");
     frame->dump_frame();
     trace("Labels");
-    for (auto const &[ix, l] : function.labels | std::ranges::views::enumerate) {
+    for (auto const &[ix, l] : function.labels | enumerate) {
         if (std::ranges::all_of(l, [](size_t ip) { return ip == 0; })) {
             continue;
         }
@@ -844,7 +844,7 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
 
 ExecutionResult execute_qbe(VM &vm)
 {
-    for (auto const &[file_ix, file] : std::ranges::views::enumerate(vm.program.files)) {
+    for (auto const &[file_ix, file] : enumerate(vm.program.files)) {
         if (file.has_main) {
             for (auto const &function : file.functions) {
                 if (function.name == L"main") {

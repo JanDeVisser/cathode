@@ -1,7 +1,0 @@
-x := #::u8
-
-func foo<T>() i64 {
-   return #::T
-}
-
-z := foo<i32>()

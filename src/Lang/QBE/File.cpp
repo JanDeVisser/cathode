@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <ranges>
 #include <sstream>
+
+#include <Util/Enumerate.h>
 
 #include <Lang/Parser.h>
 #include <Lang/QBE/QBE.h>
@@ -62,7 +63,7 @@ void emit_type(pType const &type, std::wostream &os)
             [&os, &type](StructType const &strukt) {
                 os << L"type " << type_ref(type) << " = { ";
                 std::ranges::for_each(
-                    strukt.fields | std::ranges::views::enumerate,
+                    strukt.fields | enumerate,
                     [&os](auto const &f) {
                         auto const &[ix, fld] = f;
                         if (ix > 0) {
@@ -117,7 +118,7 @@ std::wostream &operator<<(std::wostream &os, ILFile const &file)
     for (auto const &function : file.functions) {
         os << function;
     }
-    for (auto const &[ix, glb] : std::ranges::views::enumerate(file.globals)) {
+    for (auto const &[ix, glb] : enumerate(file.globals)) {
         os << "data $" << glb.name << " = { ";
         std::visit(
             overloads {
@@ -137,14 +138,14 @@ std::wostream &operator<<(std::wostream &os, ILFile const &file)
             glb.value.inner);
         os << " }\n";
     }
-    for (auto const &[ix, s] : std::ranges::views::enumerate(file.strings)) {
+    for (auto const &[ix, s] : enumerate(file.strings)) {
         os << "data $str_" << ix << " = { ";
         for (auto ch : s) {
             os << std::format(L"w {:d}, ", ch);
         }
         os << "w 0 }\n";
     }
-    for (auto const &[ix, s] : std::ranges::views::enumerate(file.cstrings)) {
+    for (auto const &[ix, s] : enumerate(file.cstrings)) {
         os << "data $cstr_" << ix << " = { ";
         for (auto ch : s) {
             os << std::format(L"b {:d}, ", ch);
@@ -154,7 +155,7 @@ std::wostream &operator<<(std::wostream &os, ILFile const &file)
     if (!file.enumerations.empty()) {
         os << '\n';
         std::ranges::for_each(
-            file.enumerations | std::views::enumerate,
+            file.enumerations | enumerate,
             [&os](auto const &tuple) {
                 auto const &[enum_id, enum_type] = tuple;
                 assert(std::holds_alternative<EnumType>(enum_type->description));
@@ -166,7 +167,7 @@ std::wostream &operator<<(std::wostream &os, ILFile const &file)
                         os << "l " << v.value << ", l " << v.label.length() << ", ";
                     });
                 std::ranges::for_each(
-                    e.values | std::views::enumerate,
+                    e.values | enumerate,
                     [&os](auto const &tuple) {
                         auto &[ix, v] = tuple;
                         if (ix > 0) {

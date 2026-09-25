@@ -858,16 +858,16 @@ std::expected<ILProgram, std::wstring> generate_qbe(ASTNode const &node)
 
 std::expected<void, std::wstring> compile_qbe(ILProgram const &program)
 {
-    fs::path dot_lia { ".lia" };
-    fs::create_directory(dot_lia);
+    fs::path dot_cathode { ".cathode" };
+    fs::create_directory(dot_cathode);
     std::vector<fs::path> o_files;
 
     for (auto const &file : program.files) {
         if (file.has_exports) {
-            fs::path file_path = dot_lia / file.name;
+            fs::path file_path = dot_cathode / file.name;
             file_path.replace_extension("ssa");
             {
-                fs::path file_path = dot_lia / file.name;
+                fs::path file_path = dot_cathode / file.name;
                 file_path.replace_extension("ssa");
                 std::wofstream os { file_path.string() };
                 os << file;
@@ -907,7 +907,8 @@ std::expected<void, std::wstring> compile_qbe(ILProgram const &program)
             "-o",
             fs::path { as_utf8(program.name) }.replace_extension("").string(),
             // "-no-pie",
-            std::format("-L{}/lib", Lang::lia_dir().string()),
+            std::format("-L{}/lib", Lang::cathode_dir().string()),
+            std::format("-Wl,-rpath,{}/lib", Lang::cathode_dir().string()),
         };
         for (auto const &o : o_files) {
             ld_args.push_back(o.string());
@@ -926,7 +927,7 @@ std::expected<void, std::wstring> compile_qbe(ILProgram const &program)
                 ld_args.push_back(std::format("-l{}", lib));
             }
         }
-        ld_args.append_range(std::array<std::string, 4> { "-lliart", "-lm", "-lpthread", "-ldl" });
+        ld_args.append_range(std::array<std::string, 4> { "-lcathodert", "-lm", "-lpthread", "-ldl" });
 
         Util::Process link { "cc", ld_args };
         if (auto res = link.execute(); !res.has_value()) {

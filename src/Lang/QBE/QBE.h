@@ -163,7 +163,7 @@ inline ILBaseType il_type_for<uint64_t>()
     return ILBaseType::L;
 }
 
-#if 0
+#if 1
 
 template<>
 inline ILBaseType il_type_for<long>()

@@ -1,8 +1,8 @@
-# lia
+# cathode
 
 A post-C/C++ systems programming language.
 
-I am aware `lia` sounds a lot like `lua`. I realized this halfway through
+I am aware `cathode` sounds a lot like `lua`. I realized this halfway through
 another renaming session. This means that the language may change names again
 sooner rather than later.
 
@@ -55,7 +55,6 @@ If you need to use a non-standard compiler, specify it using
 ## The language
 
 At this point, the best way to explore the current state of the language is
-by perusing the `.lia` files in the `test` directory. The files with leading
+by perusing the `.cth` files in the `test` directory. The files with leading
 numbers are part of the test suite and are representative of the current
 state of the language.
-

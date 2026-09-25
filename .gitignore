@@ -17,5 +17,5 @@ build/
 cmake-build-debug/
 .idea/
 .vscode
-.lia
+.cathode
 \#*#

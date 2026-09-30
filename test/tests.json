@@ -35,5 +35,6 @@
   "34_break_while",
   "35_break_if",
   "36_switch_int",
-  "37_switch_enum"
+  "37_switch_enum",
+  "38_switch_tagged_union"
 ]

@@ -37,6 +37,7 @@ using namespace Util;
     S(BoolConstant)        \
     S(Break)               \
     S(Call)                \
+    S(CapturedPayload)     \
     S(Comptime)            \
     S(Continue)            \
     S(CString)             \
@@ -288,6 +289,17 @@ struct Call : public AbstractSyntaxNode {
 
     Call(ASTNode callable, ASTNode arguments, ASTNode function = nullptr);
     ASTNode    normalized(ASTNode const &n) const;
+    BindResult bind(ASTNode const &n) const;
+};
+
+struct CapturedPayload : public AbstractSyntaxNode {
+    std::wstring name;
+    ASTNode      switch_value;
+    ASTNode      switch_case;
+    ASTNode      tag_value;
+
+    CapturedPayload(std::wstring_view const &name, ASTNode switch_value, ASTNode switch_case);
+    CapturedPayload(CapturedPayload const &captured_payload, ASTNode tag_value);
     BindResult bind(ASTNode const &n) const;
 };
 
@@ -681,10 +693,10 @@ struct Struct : public AbstractSyntaxNode {
 
 struct SwitchCase : public AbstractSyntaxNode {
     ASTNode case_value;
-    ASTNode binding;
+    ASTNode captured_payload;
     ASTNode statement;
 
-    SwitchCase(ASTNode case_value, ASTNode binding, ASTNode statement);
+    SwitchCase(ASTNode case_value, ASTNode captured_payload, ASTNode statement);
     ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
@@ -870,6 +882,7 @@ using SyntaxNode = std::variant<Dummy,
     BoolConstant,
     Break,
     Call,
+    CapturedPayload,
     Comptime,
     Continue,
     CString,

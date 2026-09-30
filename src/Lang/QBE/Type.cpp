@@ -130,7 +130,7 @@ ILBaseType qbe_type_code(EnumType const &impl)
 
 ILBaseType qbe_type_code(auto const &type)
 {
-    warning(L"Assuming qbe_type_code(`{}') is `l`", demangle<decltype(type)>());
+    // warning(L"Assuming qbe_type_code(`{}') is `l`", demangle<decltype(type)>());
     return ILBaseType::L;
 }
 

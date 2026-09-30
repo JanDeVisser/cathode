@@ -1064,6 +1064,7 @@ struct QBEUnaryExpr {
 
 using GenResult = QBEOperand::GenResult;
 
+void                                   check_tagged_union(int64_t required, QBEOperand const &val, TaggedUnionType const &tagged_union, QBELabel const &value_not_ok, QBELabel const &value_ok, QBEContext &ctx);
 GenResult                              qbe_operator(QBEBinExpr const &expr, QBEContext &ctx);
 GenResult                              qbe_operator(QBEUnaryExpr const &expr, QBEContext &ctx);
 GenResult                              generate_qbe_node(ASTNode const &n, QBEContext &ctx);

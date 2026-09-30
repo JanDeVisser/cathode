@@ -42,6 +42,7 @@ def test_compile(name, script):
         # cmdline = [os.path.join(".compiled", name)]
         cmdline = [
             "../build/bin/cathode",
+            "--verbose",
             "--list",
             "--keep-assembly",
             "compile",

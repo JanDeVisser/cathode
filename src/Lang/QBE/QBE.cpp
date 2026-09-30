@@ -254,6 +254,12 @@ GenResult generate_qbe_node(ASTNode const &n, Call const &impl, QBEContext &ctx)
 }
 
 template<>
+GenResult generate_qbe_node(ASTNode const &, CapturedPayload const &impl, QBEContext &ctx)
+{
+    return generate_qbe_node(impl.tag_value, ctx);
+}
+
+template<>
 GenResult generate_qbe_node(ASTNode const &, Comptime const &impl, QBEContext &ctx)
 {
     return generate_qbe_node(impl.statements, ctx);
@@ -700,18 +706,44 @@ GenResult generate_qbe_node(ASTNode const &n, SwitchStatement const &impl, QBECo
     for (auto const &c : impl.switch_cases) {
         auto switch_case { get<SwitchCase>(c) };
         ctx += LabelDef { LabelType::Begin, c };
-        if (auto res = std::visit(
+
+        auto generate_case_value = [&switch_var, &ctx](ILValue const &value, ASTNode const &n, QBELabel const &value_ok, QBELabel const &value_not_ok) -> GenResult {
+            return std::visit(
                 overloads {
-                    [&switch_var, &c, &ctx](ExpressionList const &list) -> GenResult {
-                        for (auto const &e : list.expressions) {
-                            ctx += LabelDef { LabelType::Begin, e };
-                            auto case_var { TRY_GENERATE(e, ctx) };
-                            case_var = TRY_DEREFERENCE(case_var, ctx);
-                            auto v { (is<EnumType>(case_var.ptype)) ? std::get<ILValues>(case_var.get_value().inner)[1] : case_var.get_value() };
+                    [&n, &switch_var, &ctx, &value, &value_ok, &value_not_ok](TagValue const &tag) -> GenResult {
+                        if (is<EnumType>(n->bound_type)) {
+                            auto v = std::get<ILValues>(value.inner)[1];
                             auto match { ILValue::local(++ctx.next_var, ILBaseType::W) };
                             ctx += ExprDef { switch_var.get_value(), v, ILOperation::Equals, match },
-                                JnzDef { match, QBELabel { LabelType::Top, c }, QBELabel { LabelType::End, e } },
-                                LabelDef { LabelType::End, e };
+                                JnzDef { match, value_ok, value_not_ok };
+                            return { };
+                        }
+                        check_tagged_union(
+                            tag.tag_value,
+                            switch_var,
+                            get<TaggedUnionType>(n->bound_type),
+                            value_not_ok,
+                            value_ok,
+                            ctx);
+                        return { };
+                    },
+                    [&value, &ctx, &value_ok, &value_not_ok, &switch_var](auto const &) -> GenResult {
+                        auto match { ILValue::local(++ctx.next_var, ILBaseType::W) };
+                        ctx += ExprDef { switch_var.get_value(), value, ILOperation::Equals, match },
+                            JnzDef { match, value_ok, value_not_ok };
+                        return { };
+                    } },
+                n->node);
+        };
+        if (auto res = std::visit(
+                overloads {
+                    [&generate_case_value, &c, &ctx](ExpressionList const &list) -> GenResult {
+                        for (auto const &e : list.expressions) {
+                            ctx += LabelDef { LabelType::Begin, e };
+                            auto val = TRY_GENERATE(e, ctx);
+                            val = TRY_DEREFERENCE(val, ctx);
+                            auto _ = generate_case_value(val.get_value(), e, QBELabel { LabelType::Top, c }, QBELabel { LabelType::End, e });
+                            ctx += LabelDef { LabelType::End, e };
                         }
                         ctx += JmpDef { LabelType::End, c };
                         return { };
@@ -720,14 +752,10 @@ GenResult generate_qbe_node(ASTNode const &n, SwitchStatement const &impl, QBECo
                         default_case = switch_case.statement;
                         return { };
                     },
-                    [&c, &switch_var, &switch_case, &ctx](auto const &) -> GenResult {
+                    [&generate_case_value, &ctx, &c, &switch_case](auto const &) -> GenResult {
                         auto case_var { TRY_GENERATE(switch_case.case_value, ctx) };
                         case_var = TRY_DEREFERENCE(case_var, ctx);
-                        auto v { (is<EnumType>(case_var.ptype)) ? std::get<ILValues>(case_var.get_value().inner)[1] : case_var.get_value() };
-                        auto match { ILValue::local(++ctx.next_var, ILBaseType::W) };
-                        ctx += ExprDef { switch_var.get_value(), v, ILOperation::Equals, match },
-                            JnzDef { match, QBELabel { LabelType::Top, c }, QBELabel { LabelType::End, c } };
-                        return { };
+                        return generate_case_value(case_var.get_value(), switch_case.case_value, QBELabel { LabelType::Top, c }, QBELabel { LabelType::End, c });
                     } },
                 switch_case.case_value->node);
             !res) {

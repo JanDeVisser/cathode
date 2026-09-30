@@ -67,7 +67,6 @@ size_t cathode$eputln(wchar_t const *ptr, int64_t len)
 [[noreturn]] void cathode$abort(wchar_t const *ptr, int64_t len)
 {
     cathode$eputln(ptr, len);
-    close(2);
     abort();
 }
 

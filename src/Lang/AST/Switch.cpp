@@ -13,19 +13,51 @@
 #include <Lang/Type.h>
 
 #include <Lang/QBE/QBE.h>
+#include <string_view>
 
 namespace Lang {
 
 using namespace std::literals;
+
+CapturedPayload::CapturedPayload(std::wstring_view const &name, ASTNode switch_value, ASTNode switch_case)
+    : name(name)
+    , switch_value(std::move(switch_value))
+    , switch_case(std::move(switch_case))
+{
+}
+
+CapturedPayload::CapturedPayload(CapturedPayload const &captured_payload, ASTNode tag_value)
+    : CapturedPayload(captured_payload.name, captured_payload.switch_value, captured_payload.switch_case)
+{
+    this->tag_value = std::move(tag_value);
+}
+
+BindResult CapturedPayload::bind(ASTNode const &n) const
+{
+    try_bind(switch_value);
+    try_bind(switch_case);
+
+    // FIXME: Error messages
+    assert(switch_value->bound_type->is_a(TypeKind::TaggedUnionType));
+    assert(switch_case->type() == SyntaxNodeType::TagValue);
+
+    auto const &tag_value = std::get<TagValue>(switch_case->node);
+
+    auto tag { n.repo->make_node<TagValue>(n->location, switch_value, tag_value.tag_value, tag_value.label, tag_value.payload_type, nullptr) };
+    tag->bound_type = switch_case->bound_type;
+    auto unwrap { Lang::make_node<UnaryExpression>(n, Operator::Unwrap, tag) };
+    unwrap->bound_type = tag_value.payload_type;
+    return unwrap->bound_type;
+}
 
 BindResult DefaultSwitchValue::bind(ASTNode const &) const
 {
     return TypeRegistry::void_;
 }
 
-SwitchCase::SwitchCase(ASTNode case_value, ASTNode binding, ASTNode statement)
+SwitchCase::SwitchCase(ASTNode case_value, ASTNode captured_payload, ASTNode statement)
     : case_value(std::move(case_value))
-    , binding(std::move(binding))
+    , captured_payload(std::move(captured_payload))
     , statement(std::move(statement))
 {
 }
@@ -58,7 +90,7 @@ ASTNode SwitchCase::normalized(ASTNode const &n) const
                 return normalize(case_value);
             } },
         case_value->node);
-    return make_node<SwitchCase>(n, normalized_case_value, normalize(binding), normalize(statement));
+    return make_node<SwitchCase>(n, normalized_case_value, captured_payload, normalize(statement));
 }
 
 BindResult SwitchCase::bind(ASTNode const &) const
@@ -92,8 +124,10 @@ BindResult SwitchStatement::bind(ASTNode const &n) const
     auto   default_in_list { false };
     for (auto const &c : switch_cases) {
         auto const &switch_case { get<SwitchCase>(c) };
-        if (switch_case.binding != nullptr && tagged_union == nullptr) {
-            return n.bind_error(L"Switch type `{}` does not allow a payload binding", switch_type->name);
+        if (switch_case.captured_payload != nullptr) {
+            if (tagged_union == nullptr) {
+                return n.bind_error(L"Switch type `{}` does not allow a payload capture", switch_type->name);
+            }
         }
         pType       binding_type { nullptr };
         auto const &case_value { switch_case.case_value };

@@ -1764,31 +1764,44 @@ ASTNode parse_switch(Parser &parser)
             if (value == nullptr) {
                 return nullptr;
             }
+            ASTNode captured_payload { nullptr };
+            if (lexer.accept_symbol('{')) {
+                if (auto res { lexer.expect_identifier() }; !res) {
+                    parser.append(res.error(), "Expected captured payload name");
+                    return nullptr;
+                } else {
+                    captured_payload = parser.make_node<CapturedPayload>(res.value().location, std::wstring(parser.text_of(res.value())), switch_value, value);
+                }
+                if (!lexer.expect_symbol('}')) {
+                    parser.append(lexer.last_location, L"Expected `}}` to terminate the captured payload `{}`", get<Identifier>(captured_payload).identifier);
+                }
+            }
             if (auto res { lexer.expect_keyword(LangKeyword::SwitchCase) }; !res) {
                 parser.append(res.error().location, "Expected `=>` in switch case");
                 return nullptr;
-            }
-            ASTNode binding { nullptr };
-            if (lexer.accept_symbol('|')) {
-                if (auto res { lexer.expect_identifier() }; !res) {
-                    parser.append(res.error(), "Expected payload binding name");
-                    return nullptr;
-                } else {
-                    binding = parser.make_node<Identifier>(res.value().location, parser.text_of(res.value()));
-                }
-                if (!lexer.expect_symbol('|')) {
-                    parser.append(lexer.last_location, L"Expected `|` to terminate the payload binding `{}`", get<Identifier>(binding).identifier);
-                }
             }
             auto statement { parser.parse_statement() };
             if (statement == nullptr) {
                 return nullptr;
             }
+            if (captured_payload != nullptr) {
+                ASTNodes statements;
+                auto     captured_payload_node { std::get<CapturedPayload>(captured_payload->node) };
+                auto     var_decl = parser.make_node<VariableDeclaration>(
+                    captured_payload->location,
+                    captured_payload_node.name,
+                    nullptr,
+                    captured_payload,
+                    true);
+                statements.push_back(var_decl);
+                statements.push_back(statement);
+                statement = parser.make_node<Block>(captured_payload->location, statements);
+            }
             if (auto res { lexer.expect_symbol(';') }; !res) {
                 parser.append(lexer.last_location, "Expected `;` terminating switch case");
                 return nullptr;
             }
-            cases.emplace_back(parser.make_node<SwitchCase>(value->location + lexer.last_location, value, binding, statement));
+            cases.emplace_back(parser.make_node<SwitchCase>(value->location + lexer.last_location, value, captured_payload, statement));
         } while (!lexer.accept_symbol('}'));
     }
     return parser.make_node<SwitchStatement>(location + lexer.last_location, label, switch_value, cases);

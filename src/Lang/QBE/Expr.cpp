@@ -103,7 +103,7 @@ static void check_result(bool success, QBEOperand const &val, ResultType const &
         JnzDef { zero, value_not_ok, value_ok };
 }
 
-static void check_tagged_union(int64_t required, QBEOperand const &val, TaggedUnionType const &tagged_union, QBELabel const &value_not_ok, QBELabel const &value_ok, QBEContext &ctx)
+void check_tagged_union(int64_t required, QBEOperand const &val, TaggedUnionType const &tagged_union, QBELabel const &value_not_ok, QBELabel const &value_ok, QBEContext &ctx)
 {
     auto eql { ILValue::local(++ctx.next_var, ILBaseType::W) };
     auto tag_ptr { ILValue::pointer(++ctx.next_var) };
@@ -126,7 +126,13 @@ static void result_must(bool success, QBEOperand const &val, ResultType const &r
 {
     check_result(success, val, result, QBELabel { LabelType::Else, val.node }, QBELabel { LabelType::End, val.node }, ctx);
     ctx += LabelDef { LabelType::Else, val.node },
-        CallDef { L"libcathodert:cathode$abort", ILValue::null(), { ctx.add_string((success) ? result_error : result_success), ILValue::integer(wcslen(empty_optional), ILBaseType::L) } },
+        CallDef {
+            L"libcathodert:cathode$abort",
+            ILValue::null(),
+            { ctx.add_string((success) ? result_error : result_success),
+                ILValue::integer(wcslen((success) ? result_error : result_success),
+                    ILBaseType::L) }
+        },
         LabelDef { LabelType::End, val.node };
 }
 
@@ -138,7 +144,7 @@ static void tagged_union_must(QBEOperand const &val, TaggedUnionType const &tagg
     auto const &tag_value { get<TagValue>(val.node) };
     check_tagged_union(tag_value.tag_value, val, tagged_union, abort_mission, carry_on, ctx);
     ctx += LabelDef { abort_mission },
-        CallDef { L"libcathodert:cathode$abort", ILValue::null(), { ctx.add_string(wrong_tagged_value), ILValue::integer(wcslen(empty_optional), ILBaseType::L) } },
+        CallDef { L"libcathodert:cathode$abort", ILValue::null(), { ctx.add_string(wrong_tagged_value), ILValue::integer(wcslen(wrong_tagged_value), ILBaseType::L) } },
         LabelDef { carry_on };
 }
 

@@ -189,6 +189,7 @@ BindResult bind(ASTNode node)
             parser.push_namespace(node);
         }
         parser.node_stack.emplace_back(node);
+        // info(L"Binding {}", MUST_EVAL(Util::to_wstring(SyntaxNodeType_name(node->type()))));
         auto retval = std::visit(
             [&node](auto const impl) {
                 auto id { node->id.id.value() };

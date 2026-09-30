@@ -10,6 +10,57 @@
 #include <Util/Error.h>
 #include <Util/Process.h>
 
+// FIXME Courtesy Dr Claude:
+//
+// Claude found three problems here:
+//
+// 1. ReadPipes::read() stops at the first hangup, src/Util/Pipe.cpp:148-155
+//
+// for (auto ix = 0; ix < 2; ++ix) {
+//      if (poll_fd[ix].revents & POLLIN) { MUST(drain(ix)); }
+//      if (poll_fd[ix].revents & POLLHUP) { done = true; break; }
+// }
+//
+// When the child aborts, the kernel closes stdout and stderr together. On the
+// next poll, stdout (index 0) reports POLLHUP. You set done and break before
+// reaching index 1, so the stderr data still in the pipe is never drained.
+// This is almost certainly your bug.
+//
+// Fix it like this:
+//
+// Treat each fd separately.
+// - On POLLHUP (or POLLIN|POLLHUP), drain that fd until read() returns 0.
+// - Then set its poll_fd[ix].fd = -1, which makes poll ignore it.
+// - Stop only once both fds are finished, and call notify_all() at that point.
+//
+// 2. Process::wait() doesn’t wait for the reader thread, src/Util/Process.cpp:100-115
+//
+// It returns as soon as waitpid does. The reader thread is detached and may not
+// have drained anything yet. stderr() → current() only blocks while the buffer
+// is empty. With a partial read, you get the partial string.
+//
+// Fix: keep the thread joinable instead of detaching it, and join() it in
+// wait() after waitpid. Alternatively, block until both pipe fds have reached
+// EOF. Either way, the output is complete by the time the exit status comes
+// back.
+//
+// 3. Crashes skip the stderr output entirely
+//
+// When the child dies from SIGABRT, WIFEXITED is false and wait() returns an
+// error. Callers like src/Lang/QBE/QBE.cpp:932-935 only read link.stderr() on a
+// non-zero exit, not in the crash branch, so the message is dropped even when
+// it was captured. Include stderr() in the crash error as well.
+//
+// A smaller issue, drain() at src/Util/Pipe.cpp:169-184: a non-blocking read
+// that returns -1 with EAGAIN goes to make_error(), and MUST then kills the
+// parent. Treat EAGAIN/EWOULDBLOCK the same as “no more data” and break out of
+// the loop.
+//
+// Quick check: run the compiled program directly in a terminal, with no
+// harness. If the full message shows up there, it confirms the bug is in
+// ReadPipes/Process, not in the runtime.
+//
+
 extern "C" {
 
 void sigchld(int)
@@ -89,7 +140,7 @@ CError Process::start()
     }
     m_in.connect_parent();
     m_out_pipes.connect_parent();
-    return {};
+    return { };
 }
 
 CError Process::background()
@@ -123,7 +174,7 @@ ProcessResult Process::execute()
 CError Process::write_to(std::string_view const &msg)
 {
     TRY(m_in.write(msg));
-    return {};
+    return { };
 }
 
 void Process::set_arguments(StringList const &cmd_args)

@@ -1,0 +1,11 @@
+{
+  "name": "38_switch_tagged_union",
+  "comptime_stdout": [],
+  "comptime_stderr": [],
+  "stdout": [
+    "quux"
+  ],
+  "stderr": [],
+  "exit": 0,
+  "args": []
+}

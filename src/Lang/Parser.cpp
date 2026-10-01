@@ -437,7 +437,7 @@ ASTNode Parser::parse_primary()
     }
     case TokenKind::QuotedString: {
         lexer.lex();
-        if (token.quoted_string().quote_type == QuoteType::SingleQuote && token.location.length != 1) {
+        if (token.quoted_string().quote_type == QuoteType::SingleQuote && token.location.length != 3) {
             append(token, "Single quoted string should contain exactly one character");
             return { };
         }

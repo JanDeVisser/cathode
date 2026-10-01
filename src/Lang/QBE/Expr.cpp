@@ -590,10 +590,28 @@ GenResult qbe_operator(QBEUnaryExpr const &expr, OptionalType const &optional, Q
 }
 
 template<>
-GenResult qbe_operator(QBEUnaryExpr const &expr, TaggedUnionType const &tagged_union, QBEContext &ctx)
+GenResult qbe_operator(QBEUnaryExpr const &expr, SliceType const &slice, QBEContext &ctx)
 {
     auto operand = TRY_DEREFERENCE(expr.operand, ctx);
     auto var = ILValue::local(++ctx.next_var, operand.get_value().type);
+    switch (expr.op) {
+    case Operator::Length: {
+        auto len_ptr { ILValue::pointer(++ctx.next_var) };
+        auto ret_value = ILValue::local(++ctx.next_var, ILBaseType::W);
+        ctx += ExprDef { operand.get_value(), ILValue::integer(sizeof(void *), ILBaseType::L), ILOperation::Add, len_ptr },
+            LoadDef { len_ptr, ret_value };
+        return QBEOperand { expr.node, ret_value };
+    } break;
+    default:
+        NYI("QBE mapping for slice operator `{}`", Operator_name(expr.op));
+        break;
+    }
+}
+
+template<>
+GenResult qbe_operator(QBEUnaryExpr const &expr, TaggedUnionType const &tagged_union, QBEContext &ctx)
+{
+    auto operand = TRY_DEREFERENCE(expr.operand, ctx);
     switch (expr.op) {
     case Operator::Unwrap: {
         tagged_union_must(operand, tagged_union, ctx);

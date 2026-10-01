@@ -140,7 +140,7 @@ ASTNode QuotedString::normalized(ASTNode const &n) const
     case QuoteType::BackQuote:
         return make_node<CString>(n, as_utf8(unescape(string)));
     case QuoteType::SingleQuote:
-        return make_node<Number>(n, static_cast<uint64_t>(string[1]));
+        return make_node<Number>(n, static_cast<uint32_t>(string[1]));
     default:
         UNREACHABLE();
     }

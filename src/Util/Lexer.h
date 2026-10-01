@@ -165,7 +165,7 @@ struct KeywordMatch {
 template<typename Keyword>
 std::optional<KeywordMatch<Keyword>> match_keyword(std::string const &str)
 {
-    return {};
+    return { };
 }
 
 template<typename B, typename C = wchar_t, typename KW = NoKeywordCode>
@@ -183,7 +183,7 @@ struct LexerTypes {
         Token(Token const &) = default;
 
         TokenKind     kind { TokenKind::Unknown };
-        TokenLocation location {};
+        TokenLocation location { };
         TokenValue    value;
 
         static Token number(Radix radix)
@@ -371,7 +371,7 @@ struct LexerTypes {
 
     template<typename... Scanners>
     struct ScannerPack {
-        std::tuple<Scanners...> scanners {};
+        std::tuple<Scanners...> scanners { };
 
         std::optional<ScanResult> scan(Buffer const &buffer, size_t index)
         {
@@ -389,7 +389,7 @@ struct LexerTypes {
             if constexpr (sizeof...(Ss) > 0) {
                 return peek<Ss...>(buffer, index);
             }
-            return {};
+            return { };
         }
     };
 
@@ -417,11 +417,11 @@ struct LexerTypes {
             auto ix = index;
             for (; ix < buffer.length() && ix - index < length; ++ix) {
                 if (marker[ix - index] != buffer[ix]) {
-                    return {};
+                    return { };
                 }
             }
             if (ix == buffer.length() && ix - index < length) {
-                return {};
+                return { };
             }
             for (; ix < buffer.length() && buffer[ix] != '\n'; ++ix)
                 ;
@@ -461,11 +461,11 @@ struct LexerTypes {
             auto ix = index;
             for (; ix < buffer.length() && ix - index < begin_length; ++ix) {
                 if (begin[ix - index] != buffer[ix]) {
-                    return {};
+                    return { };
                 }
             }
             if (ix == buffer.length() && ix - index < begin_length) {
-                return {};
+                return { };
             }
             m_in_comment = true;
             return block_comment(buffer, index);
@@ -483,7 +483,7 @@ struct LexerTypes {
                 }
                 if ((iix == buffer.length() && iix - ix < end_length) || buffer[iix] == '\n') {
                     if (iix == index) {
-                        return {};
+                        return { };
                     }
                     if constexpr (Ignore) {
                         return ScanResult { SkipToken { index }, ix - index };
@@ -529,11 +529,11 @@ struct LexerTypes {
             auto ix = index;
             for (; ix < buffer.length() && ix - index < begin_length; ++ix) {
                 if (begin[ix - index] != buffer[ix]) {
-                    return {};
+                    return { };
                 }
             }
             if (ix == buffer.length() && ix - index < begin_length) {
-                return {};
+                return { };
             }
             auto start = ix;
             for (; ix < buffer.length(); ++ix) {
@@ -547,7 +547,7 @@ struct LexerTypes {
                     }
                 }
             }
-            return ScanResult { Token::raw(begin, start, {}), ix - index };
+            return ScanResult { Token::raw(begin, start, { }), ix - index };
         }
     };
 
@@ -559,7 +559,7 @@ struct LexerTypes {
             auto ix = index;
             auto cur = buffer[ix];
             if (!isdigit(cur)) {
-                return {};
+                return { };
             }
             int (*predicate)(int) = isdigit;
             if (ix < buffer.length() - 1 && cur == '0') {
@@ -614,7 +614,7 @@ struct LexerTypes {
                 }
                 return ScanResult { Token::string(static_cast<QuoteType>(cur), ix < buffer.length()), ix - index };
             }
-            return {};
+            return { };
         }
     };
 
@@ -648,7 +648,7 @@ struct LexerTypes {
                     return ScanResult { Token::whitespace(), ix - index };
                 }
             default:
-                return {};
+                return { };
             }
         }
     };
@@ -671,7 +671,7 @@ struct LexerTypes {
                 // std::cout << "Identifier is not a keyword: " << scanned << std::endl;
                 return ScanResult { Token::identifier(), scanned.length() };
             }
-            return {};
+            return { };
         }
     };
 
@@ -691,7 +691,7 @@ struct LexerTypes {
                     break;
                 }
             }
-            return {};
+            return { };
         }
     };
 
@@ -852,7 +852,7 @@ public:
             });
         }
         lex();
-        return {};
+        return { };
     }
 
     bool accept_keyword(Keyword code)
@@ -873,7 +873,7 @@ public:
             });
         }
         lex();
-        return {};
+        return { };
     }
 
     bool accept_symbol(int symbol)
@@ -896,7 +896,7 @@ public:
     std::optional<Token> accept_identifier()
     {
         if (auto ret = peek(); !ret.is_identifier()) {
-            return {};
+            return { };
         }
         return lex();
     }
@@ -912,7 +912,7 @@ public:
     std::optional<Token> accept_number()
     {
         if (auto ret = peek(); ret.kind != TokenKind::Number) {
-            return {};
+            return { };
         }
         return lex();
     }
@@ -953,7 +953,7 @@ public:
     TokenLocation last_location;
 
 private:
-    std::optional<Token> m_current {};
+    std::optional<Token> m_current { };
 
     class Source {
     public:
@@ -1075,15 +1075,15 @@ private:
         Buffer                  m_buffer;
         size_t                  m_index { 0 };
         Lexer                  *m_lexer;
-        TokenLocation           m_location {};
-        std::optional<Token>    m_current {};
+        TokenLocation           m_location { };
+        std::optional<Token>    m_current { };
         bool                    m_in_comment { false };
         std::string             m_scanned;
-        std::tuple<Scanners...> m_scanners {};
+        std::tuple<Scanners...> m_scanners { };
     };
 
-    std::deque<Token>   m_lookback {};
-    std::deque<Token>   pushed_back {};
-    std::vector<Source> m_sources {};
+    std::deque<Token>   m_lookback { };
+    std::deque<Token>   pushed_back { };
+    std::vector<Source> m_sources { };
 };
 }

@@ -10,6 +10,7 @@ func fputln(fd: i32, s: string) void -> "libcathodert:cathode$fputln"
 
 func puts(s: string) void -> "libcathodert:cathode$puts"
 func putln(s: string) void -> "libcathodert:cathode$putln"
+func putchar(ch: u32) void -> "libcathodert:cathode$putchar"
 func putint(i: i64) void -> "libcathodert:cathode$putint"
 func putint(i: u64) void -> "libcathodert:cathode$putint"
 func putint(i: i32) void -> "libcathodert:cathode$putint"

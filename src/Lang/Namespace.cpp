@@ -181,7 +181,9 @@ pType Namespace::type_of(std::wstring const &name) const
 
 void Namespace::register_variable(std::wstring name, ASTNode variable)
 {
-    assert(!contains(name));
+    if (contains(name)) {
+        fatal(L"Trying to re-register variable `{}`", name);
+    }
 #ifdef DEBUG_NAMESPACE_STACK
     info(L"[S->v {}] {}", id.id.value(), name);
 #endif

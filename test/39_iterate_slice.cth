@@ -1,0 +1,10 @@
+
+export func main() i32
+{
+	for x in "Hello, World!" {
+		putchar(x)
+                putchar(' ')
+	}
+	endln()
+	return 0::i32
+}

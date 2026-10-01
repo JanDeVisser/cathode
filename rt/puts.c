@@ -77,6 +77,26 @@ void cathode$assert(bool assertion, wchar_t const *ptr, int64_t len)
     }
 }
 
+size_t cathode$fputchar(int fd, wchar_t const ch)
+{
+    wchar_t buf[2] = { 0 };
+    buf[0] = ch;
+    slice_t utf8 = to_utf8((slice_t) { buf, 1 });
+    size_t  ret = write(fd, utf8.ptr, utf8.size);
+    free(utf8.ptr);
+    return ret;
+}
+
+size_t cathode$putchar(wchar_t const ch)
+{
+    return cathode$fputchar(1, ch);
+}
+
+size_t cathode$eputchar(wchar_t const ch)
+{
+    return cathode$fputchar(2, ch);
+}
+
 size_t cathode$putint(int64_t i)
 {
     wchar_t buf[32];

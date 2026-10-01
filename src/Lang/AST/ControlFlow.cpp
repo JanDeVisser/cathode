@@ -109,21 +109,33 @@ BindResult ForStatement::bind(ASTNode const &n) const
 {
     try_bind(range_expr);
     auto range_type = range_expr->bound_type;
-    if (!is<RangeType>(range_type) && !(is<TypeType>(range_type) && is<EnumType>(get<TypeType>(range_type).type))) {
-        return n.bind_error(L"`for` loop range expression is a `{}`, not a range", range_type->to_string());
+    if (n->ns && !n->ns->contains(range_variable)) {
+        if (!is<RangeType>(range_type)
+            && !is<SliceType>(range_type)
+            && !(is<TypeType>(range_type) && is<EnumType>(get<TypeType>(range_type).type))) {
+            return n.bind_error(L"`for` loop range expression is a `{}`, not a range", range_type->to_string());
+        }
+        ASTNode variable_node { nullptr };
+        if (is<TypeType>(range_type)) {
+            auto enum_type { get<TypeType>(range_type).type };
+            auto enum_descr { get<EnumType>(enum_type) };
+            variable_node = (n.repo)->make_node<TagValue>(n->location, enum_descr.values[0].value, enum_descr.values[0].label, TypeRegistry::void_, nullptr);
+            variable_node->bound_type = enum_type;
+            variable_node->status = ASTStatus::Bound;
+        } else if (is<SliceType>(range_type)) {
+            auto slice_type = get<SliceType>(range_type);
+            variable_node = (n.repo)->make_node<SliceIterator>(n->location, range_expr);
+            variable_node->bound_type = TypeRegistry::the().referencing(slice_type.slice_of);
+            variable_node->status = ASTStatus::Bound;
+        } else {
+            variable_node = range_expr;
+            variable_node->bound_type = get<BinaryExpression>(range_expr).lhs->bound_type;
+            variable_node->status = ASTStatus::Bound;
+        }
+        n->ns->register_variable(range_variable, variable_node);
     }
-    ASTNode variable_node { nullptr };
-    if (is<TypeType>(range_type)) {
-        auto enum_type { get<TypeType>(range_type).type };
-        auto enum_descr { get<EnumType>(enum_type) };
-        variable_node = (n.repo)->make_node<TagValue>(n->location, enum_descr.values[0].value, enum_descr.values[0].label, TypeRegistry::void_, nullptr);
-        variable_node->bound_type = enum_type;
-        variable_node->status = ASTStatus::Bound;
-    } else {
-        variable_node = get<BinaryExpression>(range_expr).lhs;
-    }
-    n->ns->register_variable(range_variable, variable_node);
-    return try_bind(statement);
+    try_bind(statement);
+    return statement->bound_type;
 }
 
 IfStatement::IfStatement(ASTNode condition, ASTNode if_branch, ASTNode else_branch, Label label)
@@ -216,6 +228,11 @@ BindResult Return::bind(ASTNode const &n) const
             L"`return` returns from a function returning `void` and therefore cannot return a value");
     }
     return return_type;
+}
+
+SliceIterator::SliceIterator(ASTNode slice)
+    : slice(std::move(slice))
+{
 }
 
 WhileStatement::WhileStatement(Label label, ASTNode condition, ASTNode statement)

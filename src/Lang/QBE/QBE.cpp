@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <concepts>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -393,11 +394,24 @@ GenResult generate_qbe_node(ASTNode const &n, Extern const &impl, QBEContext &ct
     return QBEOperand { n, ILValue::null() };
 }
 
-GenResult generate_for_range(ASTNode const &n, ForStatement const &impl, QBEContext &ctx)
+template<typename Range>
+    requires(std::derived_from<Range, AbstractSyntaxNode>)
+GenResult generate_for_loop(ASTNode const &n, ForStatement const &, Range const &, QBEContext &)
 {
-    auto const &range = get<BinaryExpression>(impl.range_expr);
+    warning("Implement generate_for_loop for `{}`", typeid(Range).name());
+    return QBEOperand { n, ILValue::null() };
+}
+
+template<>
+GenResult generate_for_loop(ASTNode const &n, ForStatement const &impl, BinaryExpression const &range, QBEContext &ctx)
+{
+    if (range.op != Operator::Range) {
+        return QBEOperand { n, ILValue::null() };
+    }
+
     auto const &range_start = range.lhs;
     auto const &range_end = TRY_GENERATE(range.rhs, ctx);
+
     if (auto res = variable_decl(n, impl.range_variable, range_start->bound_type, range_start, ctx); !res.has_value()) {
         return std::unexpected(res.error());
     } else {
@@ -450,10 +464,60 @@ GenResult generate_for_range(ASTNode const &n, ForStatement const &impl, QBECont
     }
 }
 
-GenResult generate_for_enum(ASTNode const &n, ForStatement const &impl, QBEContext &ctx)
+template<>
+GenResult generate_for_loop(ASTNode const &n, ForStatement const &impl, SliceIterator const &iter, QBEContext &ctx)
 {
+    auto const &slice_of = get<SliceType>(impl.range_expr->bound_type).slice_of;
+
+    auto slice_var = TRY_GENERATE(iter.slice, ctx);
+    slice_var = TRY_DEREFERENCE(slice_var, ctx);
+
+    auto range_var_type { TypeRegistry::the().referencing(slice_of) };
+    auto counter { ILValue::local(++ctx.next_var, ILBaseType::L) };
+    auto str_ptr { ILValue::pointer(++ctx.next_var) };
+    auto len_ptr { ILValue::pointer(++ctx.next_var) };
+    auto len = ILValue::local(++ctx.next_var, ILBaseType::L);
+    ctx += LoadDef { slice_var.get_value(), str_ptr },
+        ExprDef { slice_var.get_value(), ILValue::integer(sizeof(void *), ILBaseType::L), ILOperation::Add, len_ptr },
+        LoadDef { len_ptr, len },
+        CopyDef { ILValue::integer(0, ILBaseType::L), counter };
+
+    if (auto res = variable_decl(n, impl.range_variable, range_var_type, nullptr, ctx); !res.has_value()) {
+        return std::unexpected(res.error());
+    } else {
+        auto const &range_var = res.value();
+        auto        elem_ptr { ILValue::local(++ctx.next_var, ILBaseType::L) };
+        auto        range_ended { ILValue::local(++ctx.next_var, ILBaseType::W) };
+        auto        offset { ILValue::local(++ctx.next_var, ILBaseType::L) };
+        ctx += LabelDef { LabelType::Begin, n },
+            ExprDef { counter, len, ILOperation::Less, range_ended },
+            JnzDef { range_ended, QBELabel { LabelType::Top, n }, QBELabel { LabelType::End, n } },
+            LabelDef { LabelType::Top, n },
+            ExprDef { counter, ILValue::integer(size_of(slice_of), ILBaseType::L), ILOperation::Mul, offset },
+            ExprDef { str_ptr, offset, ILOperation::Add, range_var.get_value() },
+            TRY_GENERATE(impl.statement, ctx);
+        ctx += ExprDef { counter, ILValue::integer(1, ILBaseType::L), ILOperation::Add, counter },
+            JmpDef { LabelType::Begin, n },
+            LabelDef { LabelType::End, n };
+        return QBEOperand { n, ILValue::null() };
+    }
+}
+
+template<>
+GenResult generate_for_loop(ASTNode const &n, ForStatement const &impl, TagValue const &, QBEContext &ctx)
+{
+    if (!is<TypeType>(impl.range_expr->bound_type)) {
+        warning(L"generate_for_loop<TagValue>(): range type `{}` is not a type", impl.range_expr->bound_type->to_string());
+        return QBEOperand { n, ILValue::null() };
+    }
     auto const &enum_type { get<TypeType>(impl.range_expr->bound_type).type };
+
+    if (!is<EnumType>(enum_type) && !is<TaggedUnionType>(enum_type)) {
+        warning(L"generate_for_loop<TagValue>(): range type `{}` is not an enumerated type", impl.range_expr->bound_type->to_string());
+        return QBEOperand { n, ILValue::null() };
+    }
     auto const &enum_descr { get<EnumType>(enum_type) };
+
     auto const &underlying { enum_descr.underlying_type };
     auto        init { (n.repo)->make_node<Number>(n->location, underlying, enum_descr.values[0].value) };
     init->bound_type = underlying;
@@ -487,13 +551,13 @@ GenResult generate_for_enum(ASTNode const &n, ForStatement const &impl, QBEConte
 template<>
 GenResult generate_qbe_node(ASTNode const &n, ForStatement const &impl, QBEContext &ctx)
 {
-    if (is<BinaryExpression>(impl.range_expr) && get<BinaryExpression>(impl.range_expr).op == Operator::Range) {
-        return generate_for_range(n, impl, ctx);
-    }
-    if (is<TypeType>(impl.range_expr->bound_type) && is<EnumType>(get<TypeType>(impl.range_expr->bound_type).type)) {
-        return generate_for_enum(n, impl, ctx);
-    }
-    return QBEOperand { n, ILValue::null() };
+    return std::visit(
+        overloads {
+            [&n, &impl, &ctx](auto const &range) -> GenResult {
+                return generate_for_loop(n, impl, range, ctx);
+            },
+        },
+        n->ns->find_variable(impl.range_variable)->node);
 }
 
 template<>

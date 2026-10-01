@@ -1,0 +1,11 @@
+{
+  "name": "39_iterate_slice",
+  "comptime_stdout": [],
+  "comptime_stderr": [],
+  "stdout": [
+    "H e l l o ,   W o r l d !"
+  ],
+  "stderr": [],
+  "exit": 0,
+  "args": []
+}

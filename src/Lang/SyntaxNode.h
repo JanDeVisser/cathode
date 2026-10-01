@@ -69,6 +69,7 @@ using namespace Util;
     S(PublicDeclaration)   \
     S(QuotedString)        \
     S(Return)              \
+    S(SliceIterator)       \
     S(StampedIdentifier)   \
     S(String)              \
     S(Struct)              \
@@ -661,6 +662,12 @@ struct Return : public AbstractSyntaxNode {
     BindResult bind(ASTNode const &n) const;
 };
 
+struct SliceIterator : public AbstractSyntaxNode {
+    ASTNode slice;
+
+    explicit SliceIterator(ASTNode slice);
+};
+
 struct StampedIdentifier : public Identifier {
     ASTNodes arguments;
 
@@ -914,6 +921,7 @@ using SyntaxNode = std::variant<Dummy,
     PublicDeclaration,
     QuotedString,
     Return,
+    SliceIterator,
     StampedIdentifier,
     String,
     Struct,

@@ -11,10 +11,9 @@
 
 #include <Lang/Operator.h>
 #include <Lang/Parser.h>
+#include <Lang/QBE/QBE.h>
 #include <Lang/SyntaxNode.h>
 #include <Lang/Type.h>
-
-#include <Lang/QBE/QBE.h>
 
 namespace Lang {
 
@@ -149,7 +148,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                     overloads {
                         [&label, this, &n, &type_type](TaggedUnionType const &t) -> std::expected<ASTNode, LangError> {
                             if (auto v = t.value_for(label); v) {
-                                auto ret = make_node<TagValue>(n, static_cast<int64_t>(*v), label, t.payload_for(label), nullptr);
+                                auto ret = make_node<Tag>(n, static_cast<int64_t>(*v), label, t.payload_for(label));
                                 ret->bound_type = type_type;
                                 ret->status = ASTStatus::Bound;
                                 return ret;
@@ -162,7 +161,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                         },
                         [&label, this, &n, &type_type](EnumType const &t) -> std::expected<ASTNode, LangError> {
                             if (auto v = t.value_for(label); v) {
-                                auto ret = make_node<TagValue>(n, static_cast<int64_t>(*v), label, nullptr, nullptr);
+                                auto ret = make_node<Tag>(n, static_cast<int64_t>(*v), label, nullptr);
                                 ret->bound_type = type_type;
                                 ret->status = ASTStatus::Bound;
                                 return ret;
@@ -234,7 +233,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                     }
                     auto const &label = get<Identifier>(rhs).identifier;
                     if (auto v = tagged_union.value_for(label); v) {
-                        make_node<TagValue>(n, lhs, static_cast<int64_t>(*v), label, tagged_union.payload_for(label), nullptr);
+                        make_node<Tag>(n, lhs, static_cast<int64_t>(*v), label, tagged_union.payload_for(label));
                         return lhs_value_type;
                     }
                     return parser.bind_error(
@@ -254,11 +253,11 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
     auto rhs_value_type = rhs_type->value_type();
 
     if (op == Operator::Assign) {
-        if (is<TagValue>(lhs)) {
+        if (is<Tag>(lhs)) {
             if (!is<TaggedUnionType>(lhs_value_type)) {
                 return parser.bind_error(lhs->location, L"Only tagged union values can be assigned a payload");
             }
-            auto const &tag_value { get<TagValue>(lhs) };
+            auto const &tag_value { get<AssignPayload>(lhs) };
             if (tag_value.payload != nullptr) {
                 return parser.bind_error(rhs->location, L"Can only attach one payload to a tagged value");
             }
@@ -277,10 +276,9 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                     tag_value.label, tag_value.payload_type->name, rhs_value_type->name);
             }
 
-            make_node<TagValue>(
+            make_node<AssignPayload>(
                 n,
                 tag_value.tag_value,
-                tag_value.label,
                 tag_value.payload_type,
                 rhs);
             return lhs_value_type;

@@ -13,8 +13,6 @@
 #include <Lang/SyntaxNode.h>
 #include <Lang/Type.h>
 
-#include <Lang/QBE/QBE.h>
-
 namespace Lang {
 
 using namespace std::literals;

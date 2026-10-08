@@ -1,36 +1,9 @@
-/*
- * Copyright (c) 2025, Jan de Visser <jan@finiandarcy.com>
- *
- * SPDX-License-Identifier: MIT
- */
+#include "Lang/QBE/QBE.h"
+#include <Lang/QBE/Generate/Generate.h>
 
-#include <cstdint>
-#include <expected>
-#include <ranges>
-#include <variant>
-
-#include <Util/Align.h>
 #include <Util/Enumerate.h>
-#include <Util/Logging.h>
-#include <Util/Options.h>
-#include <Util/Pipe.h>
-#include <Util/Process.h>
-#include <Util/Utf8.h>
-
-#include <Lang/Config.h>
-#include <Lang/Operator.h>
-#include <Lang/SyntaxNode.h>
-#include <Lang/Type.h>
-
-#include <Lang/Parser.h>
-#include <Lang/QBE/QBE.h>
 
 namespace Lang::QBE {
-
-using QBEContexts = std::vector<QBEContext>;
-
-GenResult generate_qbe_node(ASTNode const &, QBEContext &);
-GenResult generate_qbe_nodes(ASTNodes const &, QBEContext &);
 
 GenResult QBEOperand::get_value(QBEContext &ctx)
 {
@@ -476,78 +449,52 @@ GenResult global_decl(ASTNode const &n, std::wstring const &name, pType const &t
     return QBEOperand { n, ILValue::global(name, ILBaseType::L), type };
 }
 
-GenBinExpr make_binexpr(ASTNode const &n, QBEOperand lhs, Operator op, QBEOperand rhs, QBEContext &ctx)
+GenResult generate_qbe_node(ASTNode const &n, QBEContext &ctx)
 {
-    pType const &lhs_type = lhs.ptype;
-    pType const &rhs_type = rhs.ptype;
-    if (is<ReferenceType>(lhs_type) || is<ReferenceType>(rhs_type)) {
-        return std::visit(
-            overloads {
-                [&n, &lhs, &op, &rhs, &ctx](ReferenceType const &, auto const &) -> GenBinExpr {
-                    lhs = TRY_ENSURE_GENERATED(lhs, ctx);
-                    lhs = TRY_DEREFERENCE(lhs, ctx);
-                    return make_binexpr(n, lhs, op, rhs, ctx);
-                },
-                [&n, &lhs, &op, &rhs, &ctx](auto const &, ReferenceType const &) -> GenBinExpr {
-                    rhs = TRY_ENSURE_GENERATED(rhs, ctx);
-                    rhs = TRY_DEREFERENCE(rhs, ctx);
-                    return make_binexpr(n, lhs, op, rhs, ctx);
-                },
-                [&n, &lhs, &op, &rhs, &ctx](ReferenceType const &, ReferenceType const &) -> GenBinExpr {
-                    lhs = TRY_ENSURE_GENERATED(lhs, ctx);
-                    lhs = TRY_DEREFERENCE(lhs, ctx);
-                    rhs = TRY_ENSURE_GENERATED(rhs, ctx);
-                    rhs = TRY_DEREFERENCE(rhs, ctx);
-                    return make_binexpr(n, lhs, op, rhs, ctx);
-                },
-                [](auto const &, auto const &) -> GenBinExpr {
-                    UNREACHABLE();
-                }
-
-            },
-            lhs_type->description, rhs_type->description);
+    trace("Generating {}", SyntaxNodeType_name(n->type()));
+    ctx.current_node.emplace_back(n);
+    if (ctx.current_file < ctx.program.files.size()) {
+        auto &file { ctx.program.files[ctx.current_file] };
+        if (ctx.current_function < file.functions.size() && !is<Dummy>(n)) {
+            ctx += LabelDef { LabelType::Begin, n },
+                DbgLoc { n->location.line, n->location.column, as_wstring(SyntaxNodeType_name(n->type())) };
+        }
     }
-    return std::visit(
-        overloads {
-            [&n, &lhs, &op, &rhs, &ctx](StructType const &strukt, auto const &) -> GenBinExpr {
-                if (op == Operator::MemberAccess) {
-                    lhs = TRY_ENSURE_GENERATED(lhs, ctx);
-                    auto const &member = get<Identifier>(rhs.node).identifier;
-                    rhs.set_value(ILValue::integer(strukt.offset_of(member), ILBaseType::L));
-                }
-                return QBEBinExpr { n, lhs, op, rhs };
-            },
-            [&n, &lhs, &op, &rhs](TypeType const &meta_type, auto const &) -> GenBinExpr {
-                auto type = meta_type.type;
-                if (op == Operator::MemberAccess) {
-                    auto const &label = get<Identifier>(rhs.node).identifier;
-                    std::visit(
-                        overloads {
-                            [&label, &lhs, &rhs](enumerated_type auto const &enoom) {
-                                lhs.set_value(ILValue::null());
-                                auto value = enoom.value_for(label);
-                                assert(value);
-                                rhs.set_value(ILValue::integer(*value, qbe_type(enoom.underlying())));
-                            },
-                            [](auto const &) {
-                                UNREACHABLE();
-                            } },
-                        type->description);
-                }
-                return QBEBinExpr { n, lhs, op, rhs };
-            },
-            [&n, &lhs, &op, &rhs, &ctx](IntType const &, TypeType const &cast_to) -> GenBinExpr {
-                rhs.set_value(ILValue::local(++ctx.next_var, qbe_type(cast_to.type)));
-                return QBEBinExpr { n, TRY_ENSURE_GENERATED(lhs, ctx), op, rhs };
-            },
-            [&n, &lhs, &op, &rhs, &ctx](EnumType const &, TypeType const &cast_to) -> GenBinExpr {
-                rhs.set_value(ILValue::local(++ctx.next_var, qbe_type(cast_to.type)));
-                return QBEBinExpr { n, TRY_ENSURE_GENERATED(lhs, ctx), op, rhs };
-            },
-            [&n, &lhs, &op, &rhs, &ctx](auto const &, auto const &) -> GenBinExpr {
-                return QBEBinExpr { n, TRY_ENSURE_GENERATED(lhs, ctx), op, TRY_ENSURE_GENERATED(rhs, ctx) };
-            } },
-        lhs_type->description, rhs_type->description);
+    auto ret = std::visit(
+        [&n, &ctx](auto const &impl) -> GenResult {
+            return generate_qbe_node(n, impl, ctx);
+        },
+        n->node);
+    if (ctx.current_file < ctx.program.files.size()) {
+        auto &file { ctx.program.files[ctx.current_file] };
+        if (ctx.current_function < file.functions.size() && !is<Dummy>(n)) {
+            ctx += LabelDef { LabelType::End, n };
+        }
+    }
+    ctx.current_node.pop_back();
+    return ret;
+}
+
+std::expected<ILProgram, std::wstring> generate_qbe(ASTNode const &node)
+{
+    QBEContext ctx { };
+    info("[QBE] Generating IL");
+    if (auto res = generate_qbe_node(node, ctx); res.has_value()) {
+        info("[QBE] IL generated");
+        return ctx.program;
+    } else {
+        log_error(L"[QBE] Error generating IL: {}", res.error());
+        return std::unexpected(res.error());
+    }
+}
+
+GenResult generate_qbe_nodes(ASTNodes const &nodes, QBEContext &ctx)
+{
+    QBEOperand operand;
+    for (auto const &n : nodes) {
+        operand = TRY_GENERATE(n, ctx);
+    }
+    return operand;
 }
 
 }

@@ -1,0 +1,10 @@
+func foo<T>(x: T) T
+{
+   x
+}
+
+func bar(y: i64) i64
+{
+  foo(y)
+}
+

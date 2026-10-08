@@ -19,8 +19,8 @@ std::wostream &operator<<(std::wostream &os, ILOperation const &op)
     switch (op) {
 #undef S
 #define S(Op, Str, LangOp) \
-    case ILOperation::Op: \
-        os << #Str;       \
+    case ILOperation::Op:  \
+        os << #Str;        \
         break;
         ILOPERATIONS(S)
 #undef S
@@ -41,6 +41,9 @@ std::wostream &operator<<(std::wostream &os, LabelType t)
         break;
     case LabelType::Else:
         os << L"else";
+        break;
+    case LabelType::Bottom:
+        os << L"bottom";
         break;
     case LabelType::End:
         os << L"end";
@@ -248,8 +251,8 @@ std::wostream &operator<<(std::wostream &os, PhiDef const &impl)
 std::wostream &operator<<(std::wostream &os, RetDef const &impl)
 {
     os << "    ret";
-    if (impl.expr) {
-        os << ' ' << impl.expr.value();
+    if (impl.type != ILBaseType::V) {
+        os << ' ' << ILValue::return_value(impl.type);
     }
     return os;
 }

@@ -171,6 +171,9 @@ void assign(pFrame const &frame, ILValue const &val_ref, QBEValue const &v)
             [frame, &v](ILValue::ReturnValue const &) {
                 frame->return_value = v;
             },
+            [frame, &v](ILValue::BreakBlock const &) {
+                frame->break_block = v;
+            },
             [frame, &v](ILValue::Parameter const &parameter) {
                 frame->variables[parameter.index] = v;
             },
@@ -227,6 +230,10 @@ QBEValue get(pFrame const &frame, ILValue const &val_ref)
             [&frame](ILValue::ReturnValue const &) -> QBEValue {
                 trace(L"get(ReturnValue) {}", frame->return_value);
                 return frame->return_value;
+            },
+            [&frame](ILValue::BreakBlock const &) -> QBEValue {
+                trace(L"get(BreakBlock) {}", frame->break_block);
+                return frame->break_block;
             },
             [](int64_t const &int_val) -> QBEValue {
                 QBEValue v { int_val };
@@ -627,9 +634,8 @@ ExecResult execute(ILFunction const &, pFrame const &frame, LoadDef const &instr
 template<>
 ExecResult execute(ILFunction const &, pFrame const &frame, RetDef const &instruction)
 {
-    if (instruction.expr) {
-        auto retval { instruction.expr.value() };
-        return std::unexpected(get(frame, retval));
+    if (instruction.type != ILBaseType::V) {
+        return std::unexpected(frame->return_value);
     }
     return std::unexpected(QBEValue { });
 }
@@ -811,11 +817,7 @@ ExecutionResult execute_qbe(VM &vm, ILFile const &file, ILFunction const &functi
             if (frame->ip >= function.instructions.size()) {
                 if (!std::holds_alternative<RetDef>(function.instructions.back().impl)) {
                     ILInstruction ret;
-                    if (function.return_type != TypeRegistry::void_) {
-                        ret = ILInstruction { RetDef { ILValue::integer(0, ILBaseType::L) } };
-                    } else {
-                        ret = ILInstruction { RetDef { } };
-                    }
+                    ret = ILInstruction { RetDef { basetype(qbe_type(function.return_type)) } };
                     if (auto ret_res = execute(function, frame, ret); !ret_res.has_value()) {
                         return std::visit(
                             overloads {

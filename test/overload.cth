@@ -1,0 +1,17 @@
+func foo(x: i64) i64
+{
+   x
+}
+
+func foo(x: i32) i32
+{
+   x
+}
+
+func bar() i64
+{
+  foo(0::i64)
+  foo(0::i32)
+  //foo(0::u8)
+  0
+}

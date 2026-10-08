@@ -6,7 +6,6 @@
 
 // #define DEBUG_NAMESPACE_STACK
 
-#include "Lang/Keyword.h"
 #include <algorithm>
 #include <cstddef>
 #include <optional>
@@ -19,6 +18,7 @@
 #include <Util/StringUtil.h>
 #include <Util/Utf8.h>
 
+#include <Lang/Keyword.h>
 #include <Lang/Operator.h>
 #include <Lang/Parser.h>
 #include <Lang/SyntaxNode.h>

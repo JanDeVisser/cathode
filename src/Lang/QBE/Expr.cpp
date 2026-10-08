@@ -73,8 +73,7 @@ static void check_division_by_zero(QBEOperand const &rhs, QBEContext &ctx)
 {
     auto cmp_zero { ILValue::local(++ctx.next_var, ILBaseType::W) };
     ctx += ExprDef { ILValue::integer(0, rhs.get_value().type), rhs.get_value(), ILOperation::NotEqual, cmp_zero },
-        CallDef { L"libcathodert:cathode$assert", ILValue::null(), { cmp_zero, ctx.add_string(division_by_zero), ILValue::integer(wcslen(division_by_zero), ILBaseType::L) } },
-        LabelDef { LabelType::End, rhs.node };
+        CallDef { L"libcathodert:cathode$assert", ILValue::null(), { cmp_zero, ctx.add_string(division_by_zero), ILValue::integer(wcslen(division_by_zero), ILBaseType::L) } };
 }
 
 static void check_optional(QBEOperand const &val, OptionalType const &optional, QBELabel const &value_unset, QBELabel const &value_set, QBEContext &ctx)
@@ -116,16 +115,16 @@ void check_tagged_union(int64_t required, QBEOperand const &val, TaggedUnionType
 
 static void optional_must(QBEOperand const &val, OptionalType const &optional, QBEContext &ctx)
 {
-    check_optional(val, optional, QBELabel { LabelType::Top, val.node }, { LabelType::Else, val.node }, ctx);
-    ctx += LabelDef { LabelType::Top, val.node },
+    check_optional(val, optional, QBELabel { LabelType::Top, ctx.current_node.back() }, { LabelType::Else, ctx.current_node.back() }, ctx);
+    ctx += LabelDef { LabelType::Top, ctx.current_node.back() },
         CallDef { L"libcathodert:cathode$abort", ILValue::null(), { ctx.add_string(empty_optional), ILValue::integer(wcslen(empty_optional), ILBaseType::L) } },
-        LabelDef { LabelType::Else, val.node };
+        LabelDef { LabelType::Else, ctx.current_node.back() };
 }
 
 static void result_must(bool success, QBEOperand const &val, ResultType const &result, QBEContext &ctx)
 {
-    check_result(success, val, result, QBELabel { LabelType::Else, val.node }, QBELabel { LabelType::End, val.node }, ctx);
-    ctx += LabelDef { LabelType::Else, val.node },
+    check_result(success, val, result, QBELabel { LabelType::Top, ctx.current_node.back() }, QBELabel { LabelType::Else, ctx.current_node.back() }, ctx);
+    ctx += LabelDef { LabelType::Top, ctx.current_node.back() },
         CallDef {
             L"libcathodert:cathode$abort",
             ILValue::null(),
@@ -133,13 +132,13 @@ static void result_must(bool success, QBEOperand const &val, ResultType const &r
                 ILValue::integer(wcslen((success) ? result_error : result_success),
                     ILBaseType::L) }
         },
-        LabelDef { LabelType::End, val.node };
+        LabelDef { LabelType::Else, ctx.current_node.back() };
 }
 
 static void tagged_union_must(QBEOperand const &val, TaggedUnionType const &tagged_union, QBEContext &ctx)
 {
-    QBELabel carry_on = QBELabel { LabelType::End, val.node };
-    QBELabel abort_mission = QBELabel { LabelType::Else, val.node };
+    QBELabel carry_on = QBELabel { LabelType::Else, ctx.current_node.back() };
+    QBELabel abort_mission = QBELabel { LabelType::Top, ctx.current_node.back() };
     assert(is<TagValue>(val.node));
     auto const &tag_value { get<TagValue>(val.node) };
     check_tagged_union(tag_value.tag_value, val, tagged_union, abort_mission, carry_on, ctx);
@@ -321,7 +320,7 @@ GenResult qbe_operator(QBEBinExpr const &expr, OptionalType const &lhs, auto con
         assert(expr.rhs.ptype == lhs.type);
         QBELabel use_value { LabelType::Top, expr.node };
         QBELabel use_alternative { LabelType::Else, expr.node };
-        QBELabel done { LabelType::End, expr.node };
+        QBELabel done { LabelType::Bottom, expr.node };
         auto     ret = ILValue::local(++ctx.next_var, qbe_type(lhs.type));
         auto     deref = TRY_DEREFERENCE(expr.lhs, ctx);
         check_optional(deref, lhs, use_alternative, use_value, ctx);
@@ -347,7 +346,7 @@ GenResult qbe_operator(QBEBinExpr const &expr, ResultType const &lhs, auto const
         assert(expr.rhs.ptype->compatible(lhs.success) || expr.rhs.ptype->assignable_to(lhs.success));
         QBELabel use_value = { LabelType::Top, expr.node };
         QBELabel use_alternative = { LabelType::Else, expr.node };
-        QBELabel done = { LabelType::End, expr.node };
+        QBELabel done = { LabelType::Bottom, expr.node };
         auto     ret = ILValue::local(++ctx.next_var, qbe_type(lhs.success));
         auto     deref = TRY_DEREFERENCE(expr.lhs, ctx);
         check_result(true, deref, lhs, use_alternative, use_value, ctx);
@@ -374,7 +373,7 @@ GenResult qbe_operator(QBEBinExpr const &expr, TaggedUnionType const &lhs, auto 
         assert(expr.rhs.ptype->compatible(payload) || expr.rhs.ptype->assignable_to(payload));
         QBELabel use_value = { LabelType::Top, expr.node };
         QBELabel use_alternative = { LabelType::Else, expr.node };
-        QBELabel done = { LabelType::End, expr.node };
+        QBELabel done = { LabelType::Bottom, expr.node };
         auto     ret = ILValue::local(++ctx.next_var, qbe_type(payload));
         auto     deref = TRY_DEREFERENCE(expr.lhs, ctx);
         check_tagged_union(get<TagValue>(expr.lhs.node).tag_value, deref, lhs, use_alternative, use_value, ctx);

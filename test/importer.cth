@@ -1,0 +1,6 @@
+import imported
+
+func main() i32
+{
+   return imported.foo(4)::i32
+}

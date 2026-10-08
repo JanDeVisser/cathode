@@ -32,6 +32,7 @@ using namespace Util;
     S(Dummy)               \
     S(Alias)               \
     S(ArgumentList)        \
+    S(AssignPayload)       \
     S(BinaryExpression)    \
     S(Block)               \
     S(BoolConstant)        \
@@ -76,7 +77,8 @@ using namespace Util;
     S(StructMember)        \
     S(SwitchCase)          \
     S(SwitchStatement)     \
-    S(TagValue)            \
+    S(Tag)                 \
+    S(TagPayload)          \
     S(TypeSpecification)   \
     S(UnaryExpression)     \
     S(VariableDeclaration) \
@@ -219,15 +221,8 @@ enum class Visibility {
 struct AbstractSyntaxNode {
     AbstractSyntaxNode() = default;
 
-    ASTNode normalized(ASTNode const &n) const
-    {
-        return n;
-    }
-
-    BindResult bind(ASTNode const &) const
-    {
-        return nullptr;
-    }
+    ASTNode    normalized(ASTNode const &n) const { return n; }
+    BindResult bind(ASTNode const &) const { return nullptr; }
 };
 
 struct Alias : public AbstractSyntaxNode {
@@ -245,6 +240,17 @@ struct ArgumentList : public AbstractSyntaxNode {
     explicit ArgumentList(ASTNodes arguments);
     ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
+};
+
+struct AssignPayload : public AbstractSyntaxNode {
+    int64_t      tag_value;
+    std::wstring label;
+    pType        payload_type;
+    ASTNode      payload { nullptr };
+
+    // AssignPayload(int64_t tag_value, std::wstring label, pType payload_type,
+    // ASTNode payload);
+    AssignPayload(int64_t tag_value, pType payload_type, ASTNode payload);
 };
 
 struct BinaryExpression : public AbstractSyntaxNode {
@@ -482,10 +488,7 @@ private:
         };
     }
 
-    void emplace(IdentifierList const &ids)
-    {
-        emplace(ids.identifiers);
-    }
+    void emplace(IdentifierList const &ids) { emplace(ids.identifiers); }
 };
 
 struct IfStatement : public AbstractSyntaxNode {
@@ -564,10 +567,7 @@ struct Number : public AbstractSyntaxNode {
         assign(get<IntType>(type), v);
     }
 
-    Number(IntType const &type, auto v)
-    {
-        assign(type, v);
-    }
+    Number(IntType const &type, auto v) { assign(type, v); }
     BindResult bind(ASTNode const &n) const;
 
 private:
@@ -610,11 +610,7 @@ private:
 template<std::integral T>
 T get(Number const &number)
 {
-    return std::visit(
-        [](auto v) -> T {
-            return static_cast<T>(v);
-        },
-        number.value);
+    return std::visit([](auto v) -> T { return static_cast<T>(v); }, number.value);
 }
 
 struct Parameter : public AbstractSyntaxNode {
@@ -718,15 +714,18 @@ struct SwitchStatement : public AbstractSyntaxNode {
     BindResult bind(ASTNode const &n) const;
 };
 
-struct TagValue : public AbstractSyntaxNode {
-    ASTNode      operand { nullptr };
-    int64_t      tag_value;
-    std::wstring label;
-    pType        payload_type;
-    ASTNode      payload { nullptr };
+struct Tag : public AbstractSyntaxNode {
+    int64_t tag_value;
+    pType   payload_type;
 
-    TagValue(int64_t tag_value, std::wstring label, pType payload_type, ASTNode payload);
-    TagValue(ASTNode operand, int64_t tag_value, std::wstring label, pType payload_type, ASTNode payload);
+    Tag(int64_t tag_value, pType payload_type);
+};
+
+struct TagPayload : public AbstractSyntaxNode {
+    int64_t tag_value;
+    ASTNode payload;
+
+    TagPayload(int64_t tag_value, ASTNode payload);
 };
 
 struct TypeNameNode {
@@ -863,7 +862,7 @@ concept Constant = std::is_same_v<N, Number>
     || std::is_same_v<N, Decimal>
     || std::is_same_v<N, BoolConstant>
     || std::is_same_v<N, QuotedString>
-    || std::is_same_v<N, TagValue>
+    || std::is_same_v<N, Tag>
     || std::is_same_v<N, Void>;
 
 bool is_constant(ASTNode const &n);
@@ -884,6 +883,7 @@ concept Continuable = std::is_same_v<N, ForStatement>
 using SyntaxNode = std::variant<Dummy,
     Alias,
     ArgumentList,
+    AssignPayload,
     BinaryExpression,
     Block,
     BoolConstant,
@@ -928,7 +928,8 @@ using SyntaxNode = std::variant<Dummy,
     StructMember,
     SwitchCase,
     SwitchStatement,
-    TagValue,
+    Tag,
+    TagPayload,
     TypeSpecification,
     UnaryExpression,
     VariableDeclaration,
@@ -1020,9 +1021,7 @@ static inline std::wstring_view identifier(ASTNode const &n)
             [](StampedIdentifier const &node) -> std::wstring_view {
                 return std::wstring_view(node.identifier);
             },
-            [](auto const &node) -> std::wstring_view {
-                UNREACHABLE();
-            } },
+            [](auto const &) -> std::wstring_view { UNREACHABLE(); } },
         n->node);
 }
 
@@ -1045,9 +1044,7 @@ static inline std::wstring_view name(ASTNode const &n)
             [](Program const &node) -> std::wstring_view {
                 return std::wstring_view(node.name);
             },
-            [](auto const &node) -> std::wstring_view {
-                UNREACHABLE();
-            } },
+            [](auto const &) -> std::wstring_view { UNREACHABLE(); } },
         n->node);
 }
 
@@ -1097,15 +1094,14 @@ ASTNode      stamp(ASTNode node);
 ASTNodes     stamp(ASTNodes nodes);
 ASTNode      fold(ASTNode node);
 
-#define try_bind(expr)                                                       \
-    (                                                                        \
-        {                                                                    \
-            auto const &__expr = (expr);                                     \
-            if (auto const maybe = Lang::bind(__expr); !maybe.has_value()) { \
-                return BindError { maybe.error() };                          \
-            }                                                                \
-            ((__expr)->bound_type);                                          \
-        })
+#define try_bind(expr)                                                   \
+    ({                                                                   \
+        auto const &__expr = (expr);                                     \
+        if (auto const maybe = Lang::bind(__expr); !maybe.has_value()) { \
+            return BindError { maybe.error() };                          \
+        }                                                                \
+        ((__expr)->bound_type);                                          \
+    })
 
 template<typename R>
     requires std::ranges::range<R> && std::same_as<std::ranges::range_value_t<R>, ASTNode>
@@ -1140,19 +1136,17 @@ static BindResults bind_nodes(ASTNodes nodes)
     return bind_nodes(nodes | std::ranges::views::all);
 }
 
-#define try_bind_nodes(nodes)                                                 \
-    (                                                                         \
-        {                                                                     \
-            auto const &__nodes = (nodes);                                    \
-            pTypes      __types;                                              \
-            if (auto const maybe = bind_nodes(__nodes); !maybe.has_value()) { \
-                return BindError { maybe.error() };                           \
-            } else {                                                          \
-                __types = maybe.value();                                      \
-            }                                                                 \
-            (__types);                                                        \
-        })
-
+#define try_bind_nodes(nodes)                                             \
+    ({                                                                    \
+        auto const &__nodes = (nodes);                                    \
+        pTypes      __types;                                              \
+        if (auto const maybe = bind_nodes(__nodes); !maybe.has_value()) { \
+            return BindError { maybe.error() };                           \
+        } else {                                                          \
+            __types = maybe.value();                                      \
+        }                                                                 \
+        (__types);                                                        \
+    })
 }
 
 std::wostream &operator<<(std::wostream &os, Lang::SyntaxNode const &node);

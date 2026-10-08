@@ -1,6 +1,5 @@
 CompileFlags:
-  Add: [--std=c++23, -Wall, -Wextra]
-  QueryDriver: [/usr/bin/g++-15, /usr/bin/gcc-15]
+  Add: [--std=c++26, -Wall, -Wextra]
 
 Index:
   Background: Build

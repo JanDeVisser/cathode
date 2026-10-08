@@ -84,7 +84,7 @@ def test_compile(name, script):
         if "exit" in script:
             expected = script["exit"]
             if ex != expected and ex != expected + 256 and ex != expected - 256:
-                error.append(f"{name}: Exit code {ex} != {script['exit']}")
+                error.append(f"{name}: Exit code {ex}, expected {script['exit']}")
         error.extend(check_stream(script, script["stdout"], out))
         error.extend(check_stream(script, script["stderr"], err))
 
@@ -112,7 +112,7 @@ def test_eval(name, script):
         if "exit" in script:
             expected = script["exit"]
             if ex != expected and ex != expected + 256 and ex != expected - 256:
-                error.append(f"{name}: Exit code {ex} != {script['exit']}")
+                error.append(f"{name}: Eval Exit code {ex}, expected {script['exit']}")
         o = script["comptime_stdout"]
         o.extend(script["stdout"])
         error.extend(check_stream(script, o, out))

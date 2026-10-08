@@ -1,0 +1,67 @@
+func slice<T>(zta: [0]T) []T
+{
+   ret: []T;
+   ret.ptr = zta
+   ret.size = #zta
+   ret
+}
+
+func slice<T>(dynarr: [*]T) []T
+{
+   ret: []T;
+   ret.ptr = dynarr.ptr
+   ret.size = #dynarr
+   ret
+}
+
+func ensure_capacity<T>(arr: &[*]T, cap: i64) void
+{
+    if arr.cap >= cap {
+        return {}
+    }
+    newcap := min(arr.cap, 8)
+    while newcap < cap {
+        newcap *= 2;
+    }
+    if newcap * sizeof(T) > 8 {
+        if arr.ptr == null {
+            arr.ptr = malloc(newcap * sizeof(T))
+        } else {
+            newptr := realloc(arr.ptr, newcap * sizeof(T))
+            if arr.cap * sizeof(T) > 8 {
+                free(arr.ptr)
+            }
+            arr.ptr = newptr;
+        }
+    }
+    arr.cap = newcap
+}
+
+func append<T>(arr: &[*]T, elem: T) &[*]T
+{
+    ensure_capacity(arr, #arr + 1)
+    if sizeof(T) * arr.capacity <= 8 {
+        memcpy(@arr.ptr + #arr * sizeof(T), @T, sizeof(T))
+    } else {
+        memcpy(arr.ptr + #arr * sizeof(T), @T, sizeof(T))
+    }
+    arr.size += 1
+    arr
+}
+
+func append<T>(arr: &[*]T, elems: []T)
+{
+    ensure_capacity(arr, #arr + #elems)
+    if sizeof(T) * arr.capacity <= 8 {
+        memcpy(@arr.ptr + #arr * sizeof(T), T.ptr, #elems * sizeof(T))
+    } else {
+        memcpy(arr.ptr + #arr * sizeof(T), T.ptr, #elems * sizeof(T))
+    }
+    arr.size += 1
+    arr
+}
+
+func append<T>(arr: &[*]T, elems: [0]T)
+{
+    append(arr, slice(elems));
+}

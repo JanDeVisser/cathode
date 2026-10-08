@@ -1,13 +1,13 @@
 {
-  "name": "37_switch_enum",
+  "name": "37_iterate_enum",
   "comptime_stdout": [],
   "comptime_stderr": [],
   "stdout": [
     "A",
-    "B or E",
-    "C or D",
-    "C or D",
-    "B or E"
+    "B",
+    "C",
+    "D",
+    "E"
   ],
   "stderr": [],
   "exit": 0,

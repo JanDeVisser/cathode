@@ -1,0 +1,19 @@
+12 * 4
+4 + 3 * 2
+2 * (4 + 3)
+4,3,2,1
+call(12)
+call(12+34)
+call_two(12,34)
+
+
+if x == 2 {
+	y = 12
+	foo(bar)
+} else z = 13
+
+
+lbl: while x == 2 {
+	y += 3
+        foo(bar)
+}

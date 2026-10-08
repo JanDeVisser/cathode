@@ -38,6 +38,9 @@ std::wostream &operator<<(std::wostream &os, ILValue const &value)
             [&os](ILValue::ReturnValue const &) {
                 os << "%ret$";
             },
+            [&os](ILValue::BreakBlock const &) {
+                os << "%break$";
+            },
             [&os, &value](double const &dbl) {
                 std::visit(
                     overloads {

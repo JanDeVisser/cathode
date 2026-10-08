@@ -1,0 +1,11 @@
+export func main() i32 {
+  puts("First\n")
+  defer puts("Second\n")
+  puts("Third\n")
+  defer {
+    puts("Fourth\n")
+    puts("Fourth II\n")
+  }
+  puts("Fifth\n")
+  return 0::i32
+}

@@ -1,0 +1,9 @@
+func foo(y: i32) i32 {
+    return y*y
+}
+
+public func main() i32 {
+   x := foo(12)
+   return 0::i32
+}
+

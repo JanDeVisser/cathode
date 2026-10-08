@@ -1,0 +1,10 @@
+enum X {
+    A, B, C, D, E,
+}
+
+export func main() i32 {
+    for x in X {
+        putln(#x);
+    }
+    return 0::i32
+}

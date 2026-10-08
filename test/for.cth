@@ -1,0 +1,7 @@
+func main() i32
+{
+    for x in 0 .. 12 {
+        print(x)
+    }
+    return 0
+}

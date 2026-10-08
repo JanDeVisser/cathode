@@ -251,7 +251,7 @@ FoldResult evaluate_Cast(ASTNode const &, Number const &number, ASTNode &type_no
                 [&number, &type](EnumType const &enum_type) -> FoldResult {
                     for (EnumType::Value const &enum_value : enum_type.values) {
                         if (enum_value.value == get<int64_t>(number)) {
-                            return TagValue { enum_value.value, enum_value.label, nullptr, nullptr };
+                            return Tag { enum_value.value, enum_value.label, nullptr };
                         }
                     }
                     fatal(L"Cannot cast integer `{}` to enum `{}`", get<int64_t>(number), type->name);
@@ -264,7 +264,7 @@ FoldResult evaluate_Cast(ASTNode const &, Number const &number, ASTNode &type_no
     return { };
 }
 
-FoldResult evaluate_Cast(ASTNode const &tag_node, TagValue const &tag, ASTNode &type_node, TypeSpecification const &)
+FoldResult evaluate_Cast(ASTNode const &tag_node, Tag const &tag, ASTNode &type_node, TypeSpecification const &)
 {
     auto &parser { *(tag_node.repo) };
     if (auto const type = resolve(type_node); type != nullptr) {

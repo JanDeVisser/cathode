@@ -263,6 +263,9 @@ struct ILValue {
     struct ReturnValue {
     };
 
+    struct BreakBlock {
+    };
+
     struct Global {
         std::wstring name;
     };
@@ -279,6 +282,7 @@ struct ILValue {
         Variable,
         Parameter,
         ReturnValue,
+        BreakBlock,
         int64_t,
         double,
         std::wstring,
@@ -386,6 +390,11 @@ struct ILValue {
         return { ILType { std::move(td) }, ReturnValue { } };
     }
 
+    static ILValue break_block()
+    {
+        return { ILType { ILBaseType::L }, BreakBlock { } };
+    }
+
     static ILValue null()
     {
         return { ILType { }, std::monostate { } };
@@ -410,6 +419,7 @@ enum class LabelType {
     Begin,
     Top,
     Else,
+    Bottom,
     End,
     Count,
 };
@@ -580,7 +590,7 @@ struct PhiDef {
 };
 
 struct RetDef {
-    std::optional<ILValue> expr;
+    ILBaseType type;
 
     friend std::wostream &operator<<(std::wostream &os, RetDef const &impl);
 };
@@ -675,6 +685,11 @@ using ILBindings = std::vector<ILBinding>;
 using ILParameters = std::vector<ILParameter>;
 
 struct ILFunction {
+    struct BlockFrame {
+        ASTNode  block;
+        QBELabel exit_label;
+    };
+
     size_t                     file_id;
     std::wstring               name;
     pType                      return_type;
@@ -686,6 +701,7 @@ struct ILFunction {
     std::vector<ILTemporary>   temps { };
     std::vector<ILInstruction> instructions { };
     std::vector<ILLabel>       labels { };
+    std::vector<BlockFrame>    frames { };
 
     ILFunction(ILFile &file, std::wstring name, pType return_type, bool exported);
     ILBinding const      &add(std::wstring_view name, pType type);
@@ -834,6 +850,7 @@ struct QBEContext {
     ILProgram program { };
     size_t    current_file;
     size_t    current_function;
+    ASTNodes  current_node { };
 
     ILFunction        &add_function(std::wstring name, pType return_type);
     ILValue            add_string(std::wstring_view s);
@@ -866,6 +883,8 @@ struct QBEContext {
     }
 };
 
+using QBEContexts = std::vector<QBEContext>;
+
 struct Frame {
     struct VM        &vm;
     ILFile const     &file;
@@ -873,6 +892,7 @@ struct Frame {
     ILVariables       variables { };
     ILVariables       arguments { };
     QBEValue          return_value;
+    QBEValue          break_block;
     ILVariables       locals { };
     ILVariables       temporaries { };
     size_t            ip { 0 };
@@ -1076,12 +1096,6 @@ bool                                   native_call(std::string_view name, uint8_
 std::wostream                         &operator<<(std::wostream &os, ILFunction const &function);
 std::wostream                         &operator<<(std::wostream &os, ILFile const &file);
 std::wostream                         &operator<<(std::wostream &os, QBEValue const &value);
-
-template<typename T>
-T as(VM const &, QBEValue const &)
-{
-    std::unreachable();
-}
 
 }
 

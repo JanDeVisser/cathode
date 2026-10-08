@@ -55,18 +55,17 @@ std::wostream &operator<<(std::wostream &os, ILFunction const &function)
             ILValue::temporary(temp.index, temp.type),
         } << '\n';
     }
+    os << CopyDef {
+        ILValue::integer(0, ILBaseType::L),
+        ILValue::break_block(),
+    } << '\n';
     for (auto const &instruction : function.instructions) {
         os << instruction;
     }
     if (!std::holds_alternative<RetDef>(function.instructions.back().impl)) {
-        if (function.return_type != TypeRegistry::void_) {
-            os << ILInstruction { RetDef { ILValue::integer(0, ILBaseType::L) } };
-        } else {
-            os << ILInstruction { RetDef { } };
-        }
+        os << ILInstruction { RetDef { basetype(qbe_type(function.return_type)) } };
     }
     os << R"(}
-
 )";
     return os;
 }
@@ -100,5 +99,4 @@ ILTemporary const &ILFunction::add_temporary(pType const &type, ILType il_type)
 {
     return temps.emplace_back(temps.size(), type, std::move(il_type));
 }
-
 }

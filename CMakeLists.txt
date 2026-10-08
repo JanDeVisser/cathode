@@ -4,20 +4,20 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 
 find_program(CCACHE_PROGRAM ccache)
-if(CCACHE_PROGRAM)
+if (CCACHE_PROGRAM)
   set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
-  set(CMAKE_C_COMPILER_LAUNCHER   "${CCACHE_PROGRAM}")
+  set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
   message("ccache found: ${CCACHE_PROGRAM}")
-else()
+else ()
   message("ccache not found, building without it")
-endif()
+endif ()
 
 message("System: ${CMAKE_SYSTEM_NAME}. Processor: ${CMAKE_SYSTEM_PROCESSOR}. Version: ${CMAKE_SYSTEM_VERSION}.")
 message("Compiler: ${CMAKE_CXX_COMPILER_ID}. Version: ${CMAKE_CXX_COMPILER_VERSION}")
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_LESS 14.1)
   message(FATAL_ERROR "Compiling cathode requires a GNU compiler of at least version 14.1")
-endif()
+endif ()
 set(CMAKE_C_STANDARD 23)
 set(CMAKE_CXX_STANDARD 26)
 
@@ -40,13 +40,13 @@ else ()
   set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
 endif ()
 
-if( "${CMAKE_SYSTEM_PROCESSOR}"  STREQUAL "arm64")
+if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "arm64")
   set(IS_ARM64 TRUE)
-endif()
+endif ()
 
-if( "${CMAKE_SYSTEM_PROCESSOR}"  STREQUAL "x86_64")
+if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
   set(IS_X86_64 TRUE)
-endif()
+endif ()
 
 set(CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR} CACHE PATH "..." FORCE)
 
@@ -71,107 +71,11 @@ configure_file(
 
 include_directories("${PROJECT_BINARY_DIR}" "${PROJECT_SOURCE_DIR}")
 
-add_library(
-        Util
-        STATIC
-        src/Util/Align.h
-        src/Util/Arena.cpp
-        src/Util/Checked.h
-        src/Util/Defer.h
-        src/Util/Enumerate.h
-        src/Util/Error.cpp
-        #       src/Util/Integer.h
-        src/Util/IO.cpp
-        src/Util/JSON.cpp
-        src/Util/Lexer.h
-        src/Util/Logging.cpp
-        src/Util/Options.cpp
-        src/Util/Pipe.cpp
-        src/Util/Process.cpp
-        src/Util/Resolve.cpp
-        src/Util/StringScanner.h
-        src/Util/StringUtil.cpp
-        src/Util/Token.cpp
-        src/Util/TokenLocation.h
-        src/Util/Utf8.cpp
-)
-
-target_link_libraries(
-        Util
-        ${ICONV}
-        dl
-)
-
-add_library(
-    CathodeLang
-    STATIC
-    src/Lang/Coerce.cpp
-    src/Lang/Config.cpp
-    src/Lang/Dump.cpp
-    src/Lang/Fold.cpp
-    src/Lang/Keyword.cpp
-    src/Lang/Namespace.cpp
-    src/Lang/Operator.cpp
-    src/Lang/Resolve.cpp
-    src/Lang/Parser.cpp
-    src/Lang/Stamp.cpp
-    src/Lang/SyntaxNode.cpp
-    src/Lang/Type.cpp
-    src/Lang/AST/Call.cpp
-    src/Lang/AST/Constant.cpp
-    src/Lang/AST/ControlFlow.cpp
-    src/Lang/AST/Defer.cpp
-    src/Lang/AST/Expression.cpp
-    src/Lang/AST/Function.cpp
-    src/Lang/AST/Identifier.cpp
-    src/Lang/AST/Module.cpp
-    src/Lang/AST/PreProcess.cpp
-    src/Lang/AST/Switch.cpp
-    src/Lang/AST/Type.cpp
-    src/Lang/QBE/Context.cpp
-    src/Lang/QBE/Execute.cpp
-    src/Lang/QBE/Expr.cpp
-    src/Lang/QBE/File.cpp
-    src/Lang/QBE/Function.cpp
-    src/Lang/QBE/Instruction.cpp
-    src/Lang/QBE/Native.cpp
-    src/Lang/QBE/Operator.cpp
-    src/Lang/QBE/QBE.cpp
-    src/Lang/QBE/QBEInternal.cpp
-    src/Lang/QBE/Type.cpp
-    src/Lang/QBE/Value.cpp
-)
-
-target_link_libraries(
-    CathodeLang
-    PRIVATE
-    cathodert
-    Util
-    trampoline
-    m
-)
-
+add_subdirectory(src/Util)
+add_subdirectory(src/Lang)
 add_subdirectory(rt)
+add_subdirectory(src/App)
 
 include_directories(. src)
-
-add_executable(
-        cathode
-        src/Lang/Main.cpp
-)
-
-target_link_libraries(
-        cathode
-        PRIVATE
-        CathodeLang
-)
-
-#add_compile_options("-fno-inline-functions")
-
-install(TARGETS Util CathodeLang cathode
-        ARCHIVE DESTINATION lib
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        BUNDLE DESTINATION bundle)
 
 install(DIRECTORY share DESTINATION .)

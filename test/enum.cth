@@ -1,0 +1,17 @@
+enum X {
+  A,
+  B,
+}
+
+enum Y : u8 {
+  C,
+  D = 12
+}
+ 
+enum Z {
+  Foo(string),
+  Bar(i64),
+  Quux(X)
+}
+
+

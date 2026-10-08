@@ -1,0 +1,4 @@
+public func foo(x: i32) i64
+{
+    return x :: i64
+}

@@ -1,0 +1,16 @@
+func foo(x: bool) i64 {
+    defer puts("One\n");
+    if x {
+        return 0;
+    }
+    defer puts("Two\n")
+    puts("Three\n")
+    return 1;
+}
+
+export func main() i32 {
+    foo(true)
+    foo(false)
+    return 0::i32
+}
+

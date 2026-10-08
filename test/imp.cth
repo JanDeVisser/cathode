@@ -1,0 +1,6 @@
+import var_decl
+
+func x(y: i32) i32
+{
+   return 0
+}

@@ -1,0 +1,16 @@
+{
+  "name": "40_defer",
+  "comptime_stdout": [],
+  "comptime_stderr": [],
+  "stdout": [
+    "First",
+    "Third",
+    "Fifth",
+    "Fourth",
+    "Fourth II",
+    "Second"
+  ],
+  "stderr": [],
+  "exit": 0,
+  "args": []
+}

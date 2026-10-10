@@ -1,5 +1,7 @@
-#include "Lang/QBE/QBE.h"
 #include <Lang/QBE/Generate/Generate.h>
+
+#include "Lang/QBE/QBE.h"
+#include "Lang/Type.h"
 
 namespace Lang::QBE {
 
@@ -13,8 +15,53 @@ GenResult generate_for_loop(ASTNode const &n, ForStatement const &, Range const 
 }
 
 template<>
+GenResult generate_for_loop(ASTNode const &n, ForStatement const &impl, Tag const &, QBEContext &ctx)
+{
+    if (!is<TypeType>(impl.range_expr->bound_type)) {
+        warning(L"generate_for_loop<TagValue>(): range type `{}` is not a type", impl.range_expr->bound_type->to_string());
+        return QBEOperand { n, ILValue::null() };
+    }
+    auto const &enum_type { get<TypeType>(impl.range_expr->bound_type).type };
+
+    if (!is<EnumType>(enum_type) && !is<TaggedUnionType>(enum_type)) {
+        warning(L"generate_for_loop<TagValue>(): range type `{}` is not an enumerated type", impl.range_expr->bound_type->to_string());
+        return QBEOperand { n, ILValue::null() };
+    }
+    auto const &enum_descr { get<EnumType>(enum_type) };
+
+    auto const &underlying { enum_descr.underlying_type };
+    auto        init { (n.repo)->make_node<Number>(n->location, underlying, enum_descr.values[0].value) };
+    init->bound_type = underlying;
+    init->status = ASTStatus::Bound;
+    if (auto res = variable_decl(n, impl.range_variable, underlying, init, ctx); !res.has_value()) {
+        return std::unexpected(res.error());
+    } else {
+        auto const &range_var = res.value();
+        auto        enum_ptr { ctx.add_enumeration(enum_type) };
+        auto        enum_local { ILValue::local(++ctx.next_var, ILBaseType::L) };
+        auto        counter { ILValue::local(++ctx.next_var, ILBaseType::L) };
+        auto        mapped { ILValue::local(++ctx.next_var, underlying) };
+        auto        range_ended { ILValue::local(++ctx.next_var, ILBaseType::W) };
+        ctx += LoadDef { enum_ptr, counter },
+            ExprDef { enum_ptr, ILValue::integer(size_of(ILBaseType::L), ILBaseType::L), ILOperation::Add, enum_local },
+            LabelDef { LabelType::Top, n },
+            LoadDef { enum_local, mapped },
+            StoreDef { mapped, range_var.get_value() };
+        TRY_GENERATE(impl.statement, ctx);
+        ctx += ExprDef { counter, ILValue::integer(1, ILBaseType::L), ILOperation::Sub, counter },
+            ExprDef { enum_local, ILValue::integer(2 * size_of(ILBaseType::L), ILBaseType::L), ILOperation::Add, enum_local },
+            ExprDef { counter, ILValue::integer(0, ILBaseType::L), ILOperation::Greater, range_ended },
+            JnzDef { range_ended, QBELabel { LabelType::Top, n }, QBELabel { LabelType::End, n } };
+        return QBEOperand { n, ILValue::null() };
+    }
+}
+
+template<>
 GenResult generate_for_loop(ASTNode const &n, ForStatement const &impl, BinaryExpression const &range, QBEContext &ctx)
 {
+    if (range.op == Operator::MemberAccess && is<TypeType>(range.lhs->bound_type)) {
+        return generate_for_loop(n, impl, get<Tag>(range.rhs), ctx);
+    }
     if (range.op != Operator::Range) {
         return QBEOperand { n, ILValue::null() };
     }
@@ -79,48 +126,6 @@ GenResult generate_for_loop(ASTNode const &n, ForStatement const &impl, SliceIte
             TRY_GENERATE(impl.statement, ctx);
         ctx += ExprDef { counter, ILValue::integer(1, ILBaseType::L), ILOperation::Add, counter },
             ExprDef { counter, len, ILOperation::Less, range_ended },
-            JnzDef { range_ended, QBELabel { LabelType::Top, n }, QBELabel { LabelType::End, n } };
-        return QBEOperand { n, ILValue::null() };
-    }
-}
-
-template<>
-GenResult generate_for_loop(ASTNode const &n, ForStatement const &impl, TagValue const &, QBEContext &ctx)
-{
-    if (!is<TypeType>(impl.range_expr->bound_type)) {
-        warning(L"generate_for_loop<TagValue>(): range type `{}` is not a type", impl.range_expr->bound_type->to_string());
-        return QBEOperand { n, ILValue::null() };
-    }
-    auto const &enum_type { get<TypeType>(impl.range_expr->bound_type).type };
-
-    if (!is<EnumType>(enum_type) && !is<TaggedUnionType>(enum_type)) {
-        warning(L"generate_for_loop<TagValue>(): range type `{}` is not an enumerated type", impl.range_expr->bound_type->to_string());
-        return QBEOperand { n, ILValue::null() };
-    }
-    auto const &enum_descr { get<EnumType>(enum_type) };
-
-    auto const &underlying { enum_descr.underlying_type };
-    auto        init { (n.repo)->make_node<Number>(n->location, underlying, enum_descr.values[0].value) };
-    init->bound_type = underlying;
-    init->status = ASTStatus::Bound;
-    if (auto res = variable_decl(n, impl.range_variable, underlying, init, ctx); !res.has_value()) {
-        return std::unexpected(res.error());
-    } else {
-        auto const &range_var = res.value();
-        auto        enum_ptr { ctx.add_enumeration(enum_type) };
-        auto        enum_local { ILValue::local(++ctx.next_var, ILBaseType::L) };
-        auto        counter { ILValue::local(++ctx.next_var, ILBaseType::L) };
-        auto        mapped { ILValue::local(++ctx.next_var, underlying) };
-        auto        range_ended { ILValue::local(++ctx.next_var, ILBaseType::W) };
-        ctx += LoadDef { enum_ptr, counter },
-            ExprDef { enum_ptr, ILValue::integer(size_of(ILBaseType::L), ILBaseType::L), ILOperation::Add, enum_local },
-            LabelDef { LabelType::Top, n },
-            LoadDef { enum_local, mapped },
-            StoreDef { mapped, range_var.get_value() };
-        TRY_GENERATE(impl.statement, ctx);
-        ctx += ExprDef { counter, ILValue::integer(1, ILBaseType::L), ILOperation::Sub, counter },
-            ExprDef { enum_local, ILValue::integer(2 * size_of(ILBaseType::L), ILBaseType::L), ILOperation::Add, enum_local },
-            ExprDef { counter, ILValue::integer(0, ILBaseType::L), ILOperation::Greater, range_ended },
             JnzDef { range_ended, QBELabel { LabelType::Top, n }, QBELabel { LabelType::End, n } };
         return QBEOperand { n, ILValue::null() };
     }

@@ -119,7 +119,7 @@ BindResult ForStatement::bind(ASTNode const &n) const
         if (is<TypeType>(range_type)) {
             auto enum_type { get<TypeType>(range_type).type };
             auto enum_descr { get<EnumType>(enum_type) };
-            variable_node = (n.repo)->make_node<TagValue>(n->location, enum_descr.values[0].value, enum_descr.values[0].label, TypeRegistry::void_, nullptr);
+            variable_node = (n.repo)->make_node<Tag>(n->location, enum_descr.values[0].value);
             variable_node->bound_type = enum_type;
             variable_node->status = ASTStatus::Bound;
         } else if (is<SliceType>(range_type)) {

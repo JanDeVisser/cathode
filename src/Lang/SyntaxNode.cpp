@@ -111,9 +111,9 @@ bool is_constant(ASTNode const &, ExpressionList const &impl)
 }
 
 template<>
-bool is_constant(ASTNode const &, TagValue const &impl)
+bool is_constant(ASTNode const &, Tag const &impl)
 {
-    return impl.operand == nullptr;
+    return true;
 }
 
 template<>

@@ -269,6 +269,19 @@ std::optional<int64_t> EnumType::value_for(std::wstring_view label) const
     return { };
 }
 
+std::optional<std::wstring> EnumType::label_for(int64_t value) const
+{
+    auto const &res = std::ranges::find_if(
+        values,
+        [&value](auto const &v) -> bool {
+            return v.value == value;
+        });
+    if (res != values.end()) {
+        return res->label;
+    }
+    return {};
+}
+
 pType EnumType::underlying() const
 {
     return underlying_type;
@@ -330,6 +343,11 @@ bool TaggedUnionType::is_valid(std::wstring_view label) const
 std::optional<int64_t> TaggedUnionType::value_for(std::wstring_view label) const
 {
     return get<EnumType>(tag_type).value_for(label);
+}
+
+std::optional<std::wstring> TaggedUnionType::label_for(int64_t value) const
+{
+    return get<EnumType>(tag_type).label_for(value);
 }
 
 pType TaggedUnionType::payload_for(std::wstring_view label) const
@@ -1088,6 +1106,17 @@ pType TypeRegistry::type_of(pType type)
     }
     auto ret = make_type(std::format(L"meta({})", type->name), TypeType { type });
     return ret;
+}
+
+std::optional<std::wstring> label_for(pType const &type, int64_t value)
+{
+    return std::visit(
+        overloads {
+            [&value](auto const &enum_type) -> std::wstring {
+                return label_for(enum_type, value).value_or(L"??");
+            },
+        },
+        type->description);
 }
 }
 

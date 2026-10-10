@@ -3,8 +3,9 @@
 namespace Lang::QBE {
 
 template<>
-GenResult generate_qbe_node(ASTNode const &n, TagValue const &impl, QBEContext &ctx)
+GenResult generate_qbe_node(ASTNode const &n, Tag const &impl, QBEContext &ctx)
 {
+#if 0
     if (impl.operand != nullptr) {
         auto ret = TRY_GENERATE(impl.operand, ctx);
         ret.node = n;
@@ -28,6 +29,10 @@ GenResult generate_qbe_node(ASTNode const &n, TagValue const &impl, QBEContext &
         n->bound_type->description);
     values.emplace_back(ILValue::integer(impl.tag_value, underlying_type));
     return QBEOperand { n, ILValue::sequence(values, n->bound_type) };
+#else
+    return QBEOperand { n, ILValue::null() };
+
+#endif
 }
 
 }

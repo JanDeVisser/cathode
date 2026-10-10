@@ -120,8 +120,9 @@ bool Operand::matches(ASTNode const &node, pType const &concrete, pType const &h
                                 return result.success;
                             },
                             [&node](TaggedUnionType const &tagged_union) -> pType {
-                                assert(is<TagValue>(node));
-                                return TypeRegistry::the().referencing(get<TagValue>(node).payload_type);
+                                assert(is<Tag>(node));
+                                auto const &tag { get<Tag>(node) };
+                                return TypeRegistry::the().referencing(tagged_union.payload_for(tag.tag_value));
                             },
                             [](auto const &) -> pType {
                                 UNREACHABLE();
@@ -177,8 +178,9 @@ pType BinaryOperator::return_type(ASTNode const &node, pType const &lhs_type, pT
                                 return result.success;
                             },
                             [&node](TaggedUnionType const &tagged_union) -> pType {
-                                assert(is<TagValue>(node));
-                                return TypeRegistry::the().referencing(get<TagValue>(node).payload_type);
+                                assert(is<Tag>(node));
+                                auto const &tag { get<Tag>(node) };
+                                return TypeRegistry::the().referencing(tagged_union.payload_for(tag.tag_value));
                             },
                             [](auto const &) -> pType {
                                 UNREACHABLE();

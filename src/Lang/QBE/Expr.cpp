@@ -139,9 +139,8 @@ static void tagged_union_must(QBEOperand const &val, TaggedUnionType const &tagg
 {
     QBELabel carry_on = QBELabel { LabelType::Else, ctx.current_node.back() };
     QBELabel abort_mission = QBELabel { LabelType::Top, ctx.current_node.back() };
-    assert(is<TagValue>(val.node));
-    auto const &tag_value { get<TagValue>(val.node) };
-    check_tagged_union(tag_value.tag_value, val, tagged_union, abort_mission, carry_on, ctx);
+    auto const &tag { get<Tag>(val.node) };
+    check_tagged_union(tag.tag_value, val, tagged_union, abort_mission, carry_on, ctx);
     ctx += LabelDef { abort_mission },
         CallDef { L"libcathodert:cathode$abort", ILValue::null(), { ctx.add_string(wrong_tagged_value), ILValue::integer(wcslen(wrong_tagged_value), ILBaseType::L) } },
         LabelDef { carry_on };
@@ -171,11 +170,9 @@ static GenResult unwrap_result(bool success, ASTNode const &unwrapped, QBEOperan
 static GenResult unwrap_tagged_union(ASTNode const &unwrapped, QBEOperand const &result, QBEContext &ctx)
 {
     auto tagged_union = get<TaggedUnionType>(result.ptype);
-    assert(is<TagValue>(result.node));
-    auto const &tag_value { get<TagValue>(result.node) };
-    auto        reference = QBEOperand {
+    auto reference = QBEOperand {
         unwrapped,
-        TypeRegistry::the().referencing(tag_value.payload_type),
+        TypeRegistry::the().referencing(result.node->bound_type),
         result.get_value(),
     };
     return TRY_DEREFERENCE(reference, ctx);
@@ -368,15 +365,14 @@ GenResult qbe_operator(QBEBinExpr const &expr, ResultType const &lhs, auto const
 GenResult qbe_operator(QBEBinExpr const &expr, TaggedUnionType const &lhs, auto const &, QBEContext &ctx)
 {
     if (expr.op == Operator::LogicalOr) {
-        assert(is<TagValue>(expr.lhs.node));
-        auto const &payload { get<TagValue>(expr.lhs.node).payload_type };
+        auto const &payload { lhs.payload_for(get<Tag>(expr.lhs.node).tag_value) };
         assert(expr.rhs.ptype->compatible(payload) || expr.rhs.ptype->assignable_to(payload));
         QBELabel use_value = { LabelType::Top, expr.node };
         QBELabel use_alternative = { LabelType::Else, expr.node };
         QBELabel done = { LabelType::Bottom, expr.node };
         auto     ret = ILValue::local(++ctx.next_var, qbe_type(payload));
         auto     deref = TRY_DEREFERENCE(expr.lhs, ctx);
-        check_tagged_union(get<TagValue>(expr.lhs.node).tag_value, deref, lhs, use_alternative, use_value, ctx);
+        check_tagged_union(get<Tag>(expr.lhs.node).tag_value, deref, lhs, use_alternative, use_value, ctx);
         ctx += LabelDef { use_alternative };
         auto alternative = TRY_DEREFERENCE(expr.rhs, ctx);
         ctx += CopyDef { alternative.get_value(), ret },

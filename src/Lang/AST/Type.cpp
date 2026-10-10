@@ -190,20 +190,8 @@ BindResult StructMember::bind(ASTNode const &) const
     return get<TypeType>(try_bind(member_type)).type;
 }
 
-TagValue::TagValue(int64_t tag_value, std::wstring label, pType payload_type, ASTNode payload)
+Tag::Tag(int64_t tag_value)
     : tag_value(tag_value)
-    , label(std::move(label))
-    , payload_type(std::move(payload_type))
-    , payload(std::move(payload))
-{
-}
-
-TagValue::TagValue(ASTNode operand, int64_t tag_value, std::wstring label, pType payload_type, ASTNode payload)
-    : operand(std::move(operand))
-    , tag_value(tag_value)
-    , label(std::move(label))
-    , payload_type(std::move(payload_type))
-    , payload(std::move(payload))
 {
 }
 

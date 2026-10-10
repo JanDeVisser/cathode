@@ -38,15 +38,10 @@ BindResult CapturedPayload::bind(ASTNode const &n) const
     try_bind(switch_case);
 
     // FIXME: Error messages
-    assert(switch_value->bound_type->is_a(TypeKind::TaggedUnionType));
-    assert(switch_case->type() == SyntaxNodeType::TagValue);
-
-    auto const &tag_value = std::get<TagValue>(switch_case->node);
-
-    auto tag { n.repo->make_node<TagValue>(n->location, switch_value, tag_value.tag_value, tag_value.label, tag_value.payload_type, nullptr) };
-    tag->bound_type = switch_case->bound_type;
-    auto unwrap { Lang::make_node<UnaryExpression>(n, Operator::Unwrap, tag) };
-    unwrap->bound_type = tag_value.payload_type;
+    auto const &tagged_union { get<TaggedUnionType>(switch_value->bound_type) };
+    auto const &tag { get<Tag>(switch_case) };
+    auto        unwrap { Lang::make_node<UnaryExpression>(n, Operator::Unwrap, switch_case) };
+    unwrap->bound_type = tagged_union.payload_for(tag.tag_value);
     return unwrap->bound_type;
 }
 

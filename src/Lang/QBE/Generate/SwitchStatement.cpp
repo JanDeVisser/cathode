@@ -16,7 +16,7 @@ GenResult generate_qbe_node(ASTNode const &n, SwitchStatement const &impl, QBECo
         auto generate_case_value = [&switch_var, &ctx](ILValue const &value, ASTNode const &n, QBELabel const &value_ok, QBELabel const &value_not_ok) -> void {
             std::visit(
                 overloads {
-                    [&n, &switch_var, &ctx, &value, &value_ok, &value_not_ok](TagValue const &tag) -> void {
+                    [&n, &switch_var, &ctx, &value, &value_ok, &value_not_ok](Tag const &tag) -> void {
                         if (is<EnumType>(n->bound_type)) {
                             auto v = std::get<ILValues>(value.inner)[1];
                             auto match { ILValue::local(++ctx.next_var, ILBaseType::W) };
@@ -59,7 +59,7 @@ GenResult generate_qbe_node(ASTNode const &n, SwitchStatement const &impl, QBECo
                         default_case = switch_case.statement;
                         return { };
                     },
-                    [&generate_case_value, &ctx, &c, &switch_case, &n](TagValue const &) -> GenResult {
+                    [&generate_case_value, &ctx, &c, &switch_case, &n](Tag const &) -> GenResult {
                         auto case_var { TRY_GENERATE(switch_case.case_value, ctx) };
                         case_var = TRY_DEREFERENCE(case_var, ctx);
                         generate_case_value(case_var.get_value(), switch_case.case_value, QBELabel { LabelType::Top, c }, QBELabel { LabelType::End, c });

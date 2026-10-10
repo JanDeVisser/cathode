@@ -8,6 +8,7 @@
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <utility>
 
 #include <Util/StringUtil.h>
 #include <Util/Utf8.h>
@@ -15,6 +16,8 @@
 #include <Lang/Operator.h>
 #include <Lang/Parser.h>
 #include <Lang/SyntaxNode.h>
+
+#include "Lang/Type.h"
 
 namespace Lang {
 
@@ -199,17 +202,6 @@ void dump(ASTNode const &, SwitchStatement const &impl, std::wostream &os, int i
     dump(impl.switch_value, os, indent + 4);
     for (auto const &c : impl.switch_cases) {
         dump(c, os, indent + 4);
-    }
-}
-
-template<>
-void dump(ASTNode const &, TagValue const &impl, std::wostream &os, int indent)
-{
-    if (impl.operand) {
-        dump(impl.operand, os, indent + 4);
-    }
-    if (impl.payload) {
-        dump(impl.payload, os, indent + 4);
     }
 }
 
@@ -439,10 +431,42 @@ std::wstring to_string(ASTNode const &, StructMember const &impl)
     return std::format(L"{} {}", impl.label, to_string(impl.member_type));
 }
 
-template<>
-std::wstring to_string(ASTNode const &, TagValue const &impl)
+template<TagReference TagRef>
+std::wstring to_string(ASTNode const &n, TagRef const &impl)
 {
-    return std::format(L"{}={}", impl.label, impl.tag_value);
+    std::wstringstream ss {};
+    ss << impl.tag_value;
+    if (n->bound_type) {
+        std::visit(
+            overloads {
+                [&ss, &impl](enumerated_type auto const &enoom) -> void {
+                    ss << L"=" << enoom.label_for(impl.tag_value).value_or(L"??");
+                },
+                [](auto const &) -> void {
+                    std::unreachable();
+                } },
+            n->bound_type->description);
+    }
+    return ss.str();
+}
+
+template<>
+std::wstring to_string(ASTNode const &n, TagPayload const &impl)
+{
+    std::wstringstream ss {};
+    ss << impl.tag_value;
+    if (n->bound_type) {
+        std::visit(
+            overloads {
+                [&ss, &impl](enumerated_type auto const &enoom) -> void {
+                    ss << L"=" << enoom.label_for(impl.tag_value).value_or(L"??");
+                },
+                [](auto const &) -> void {
+                    std::unreachable();
+                } },
+            n->bound_type->description);
+    }
+    return ss.str();
 }
 
 template<>

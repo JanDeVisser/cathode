@@ -6,10 +6,14 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 
 #include <Lang/Operator.h>
 #include <Lang/Parser.h>
 #include <Lang/SyntaxNode.h>
+
+#include "Lang/Type.h"
+#include "Util/Logging.h"
 
 namespace Lang {
 
@@ -251,12 +255,12 @@ FoldResult evaluate_Cast(ASTNode const &, Number const &number, ASTNode &type_no
                 [&number, &type](EnumType const &enum_type) -> FoldResult {
                     for (EnumType::Value const &enum_value : enum_type.values) {
                         if (enum_value.value == get<int64_t>(number)) {
-                            return Tag { enum_value.value, enum_value.label, nullptr };
+                            return Tag { enum_value.value };
                         }
                     }
                     fatal(L"Cannot cast integer `{}` to enum `{}`", get<int64_t>(number), type->name);
                 },
-                [&type](auto const &) -> FoldResult {
+                [](auto const &) -> FoldResult {
                     return { };
                 } },
             type->description);
@@ -273,12 +277,20 @@ FoldResult evaluate_Cast(ASTNode const &tag_node, Tag const &tag, ASTNode &type_
             if (tag.tag_value < int_type.min_value) {
                 return tag_node.bind_error(
                     L"Cannot cast enum value `{}.{}` to `{}` because {} < {}",
-                    tag_node->bound_type->name, type->name, tag.label, tag.tag_value, int_type.min_value);
+                    tag_node->bound_type->name,
+                    label_for(tag_node->bound_type, tag.tag_value).value_or(L"??"),
+                    type->name,
+                    tag.tag_value,
+                    int_type.min_value);
             }
             if (tag.tag_value > int_type.max_value) {
                 return tag_node.bind_error(
                     L"Cannot cast enum value `{}.{}` to `{}` because {} > {}",
-                    tag_node->bound_type->name, type->name, tag.label, tag.tag_value, int_type.max_value);
+                    tag_node->bound_type->name,
+                    label_for(tag_node->bound_type, tag.tag_value).value_or(L"??"),
+                    type->name,
+                    tag.tag_value,
+                    int_type.max_value);
             }
             return Number { get<IntType>(type), tag.tag_value };
         }

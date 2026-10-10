@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2025, Jan de Visser <jan@finiandarcy.com>
  *
@@ -10,13 +9,12 @@
 #include <algorithm>
 #include <cstdint>
 #include <format>
+#include <iterator>
 #include <map>
 #include <sstream>
 #include <string>
 #include <variant>
 #include <vector>
-
-#include <rt/cathode.h>
 
 #include <Util/Align.h>
 #include <Util/Logging.h>
@@ -24,6 +22,8 @@
 #include <Util/Utf8.h>
 
 #include <Lang/Keyword.h>
+
+#include <rt/cathode.h>
 
 namespace Lang {
 
@@ -359,13 +359,14 @@ struct EnumType {
     pType  underlying_type;
     Values values;
 
-    std::wstring           to_string() const;
-    intptr_t               size_of() const;
-    intptr_t               align_of() const;
-    bool                   is_valid(std::wstring_view label) const;
-    std::optional<int64_t> value_for(std::wstring_view label) const;
-    pType                  underlying() const;
-    std::wstring           encode() const;
+    std::wstring                to_string() const;
+    intptr_t                    size_of() const;
+    intptr_t                    align_of() const;
+    bool                        is_valid(std::wstring_view label) const;
+    std::optional<int64_t>      value_for(std::wstring_view label) const;
+    std::optional<std::wstring> label_for(int64_t value) const;
+    pType                       underlying() const;
+    std::wstring                encode() const;
 };
 
 struct TaggedUnionType {
@@ -378,16 +379,17 @@ struct TaggedUnionType {
     pType tag_type;
     Tags  tags;
 
-    std::wstring           to_string() const;
-    intptr_t               size_of() const;
-    intptr_t               align_of() const;
-    bool                   is_valid(std::wstring_view label) const;
-    std::optional<int64_t> value_for(std::wstring_view label) const;
-    pType                  payload_for(std::wstring_view label) const;
-    pType                  payload_for(int64_t tag) const;
-    pType                  underlying() const;
-    intptr_t               tag_offset() const;
-    std::wstring           encode() const;
+    std::wstring                to_string() const;
+    intptr_t                    size_of() const;
+    intptr_t                    align_of() const;
+    bool                        is_valid(std::wstring_view label) const;
+    std::optional<int64_t>      value_for(std::wstring_view label) const;
+    std::optional<std::wstring> label_for(int64_t value) const;
+    pType                       payload_for(std::wstring_view label) const;
+    pType                       payload_for(int64_t tag) const;
+    pType                       underlying() const;
+    intptr_t                    tag_offset() const;
+    std::wstring                encode() const;
 };
 
 template<class S>
@@ -464,7 +466,7 @@ struct Type {
     pType                         id { nullptr };
     std::wstring                  name;
     TypeDescription               description;
-    std::map<std::wstring, pType> arguments { };
+    std::map<std::wstring, pType> arguments {};
 
     template<typename DescrType>
     Type(std::wstring n, DescrType descr)
@@ -605,6 +607,19 @@ inline pType const &type_of<void *>() { return TypeRegistry::pointer; }
 template<>
 inline pType const &type_of<char *>() { return TypeRegistry::cstring; }
 
+template<class T>
+std::optional<std::wstring> label_for(T const &, int64_t)
+{
+    std::unreachable();
+}
+
+template<enumerated_type E>
+std::optional<std::wstring> label_for(E const &type, int64_t value)
+{
+    return type.label_for(value).value_or(L"??");
+}
+
+std::optional<std::wstring> label_for(pType const &type, int64_t value);
 }
 
 std::wostream &operator<<(std::wostream &os, Lang::pType const &type);

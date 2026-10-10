@@ -243,10 +243,9 @@ struct ArgumentList : public AbstractSyntaxNode {
 };
 
 struct AssignPayload : public AbstractSyntaxNode {
-    int64_t      tag_value;
-    std::wstring label;
-    pType        payload_type;
-    ASTNode      payload { nullptr };
+    int64_t tag_value;
+    pType   payload_type;
+    ASTNode payload { nullptr };
 
     // AssignPayload(int64_t tag_value, std::wstring label, pType payload_type,
     // ASTNode payload);
@@ -268,7 +267,7 @@ struct Block : public AbstractSyntaxNode {
     Label    label;
 
     Block() = default;
-    Block(ASTNodes statements, Label label = { });
+    Block(ASTNodes statements, Label label = {});
     ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
@@ -423,7 +422,7 @@ struct ForStatement : public AbstractSyntaxNode {
     ASTNode      statement;
     Label        label;
 
-    ForStatement(std::wstring var, ASTNode expr, ASTNode statement, Label label = { });
+    ForStatement(std::wstring var, ASTNode expr, ASTNode statement, Label label = {});
     ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
@@ -497,7 +496,7 @@ struct IfStatement : public AbstractSyntaxNode {
     ASTNode else_branch;
     Label   label;
 
-    IfStatement(ASTNode condition, ASTNode if_branch, ASTNode else_branch, Label label = { });
+    IfStatement(ASTNode condition, ASTNode if_branch, ASTNode else_branch, Label label = {});
     ASTNode    normalized(ASTNode const &n) const;
     BindResult bind(ASTNode const &n) const;
 };
@@ -716,9 +715,8 @@ struct SwitchStatement : public AbstractSyntaxNode {
 
 struct Tag : public AbstractSyntaxNode {
     int64_t tag_value;
-    pType   payload_type;
 
-    Tag(int64_t tag_value, pType payload_type);
+    Tag(int64_t tag_value);
 };
 
 struct TagPayload : public AbstractSyntaxNode {
@@ -730,7 +728,7 @@ struct TagPayload : public AbstractSyntaxNode {
 
 struct TypeNameNode {
     Strings  name;
-    ASTNodes arguments { };
+    ASTNodes arguments {};
 };
 
 struct ReferenceDescriptionNode {
@@ -817,7 +815,7 @@ struct UnaryExpression : public AbstractSyntaxNode {
 
 struct VariableDeclaration : public AbstractSyntaxNode {
     std::wstring name;
-    ASTNode      type_name { };
+    ASTNode      type_name {};
     ASTNode      initializer;
     bool         is_const;
     Visibility   visibility { Visibility::Static };
@@ -880,6 +878,11 @@ concept Continuable = std::is_same_v<N, ForStatement>
     || std::is_same_v<N, LoopStatement>
     || std::is_same_v<N, WhileStatement>;
 
+template<typename N>
+concept TagReference = std::is_same_v<N, AssignPayload>
+    || std::is_same_v<N, Tag>
+    || std::is_same_v<N, TagPayload>;
+
 using SyntaxNode = std::variant<Dummy,
     Alias,
     ArgumentList,
@@ -939,10 +942,10 @@ using SyntaxNode = std::variant<Dummy,
 
 struct ASTNodeImpl {
     using NodeTag = std::variant<bool, int64_t, std::wstring, pType, ASTNode>;
-    TokenLocation location { };
+    TokenLocation location {};
     ASTStatus     status { ASTStatus::Initialized };
-    SyntaxNode    node { };
-    pType         bound_type { };
+    SyntaxNode    node {};
+    pType         bound_type {};
     NSNode        ns { nullptr };
     ASTNode       id;
     ASTNode       supercedes;
@@ -1108,7 +1111,7 @@ template<typename R>
 BindResults bind_nodes(R const &nodes)
 {
     pTypes                   types;
-    std::optional<ASTStatus> ret { };
+    std::optional<ASTStatus> ret {};
 
     for (auto &n : nodes) {
         auto res = bind(n);

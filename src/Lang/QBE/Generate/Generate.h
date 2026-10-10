@@ -95,7 +95,7 @@ GenResult generate_qbe_node(ASTNode const &n, Struct const &, QBEContext &);
 template<>
 GenResult generate_qbe_node(ASTNode const &n, SwitchStatement const &impl, QBEContext &ctx);
 template<>
-GenResult generate_qbe_node(ASTNode const &n, TagValue const &impl, QBEContext &ctx);
+GenResult generate_qbe_node(ASTNode const &n, Tag const &impl, QBEContext &ctx);
 template<>
 GenResult generate_qbe_node(ASTNode const &n, UnaryExpression const &impl, QBEContext &ctx);
 template<>

@@ -399,7 +399,10 @@ BindResult FunctionDefinition::bind(ASTNode const &n) const
         }
         n->ns->parent->register_function(name, n);
     }
-    auto &decl = get<FunctionDeclaration>(declaration);
+    if (is<ExternLink>(implementation)) {
+        return t;
+    }
+    auto const &decl = get<FunctionDeclaration>(declaration);
     if (!decl.generics.empty()) {
         return TypeRegistry::void_;
     }

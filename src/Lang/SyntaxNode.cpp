@@ -6,7 +6,6 @@
 
 #include <ostream>
 #include <string>
-#include <string_view>
 #include <unistd.h>
 
 #include <Util/Defer.h>
@@ -137,7 +136,7 @@ ASTNode normalize(ASTNode node)
         return nullptr;
     }
     auto &parser { *(node.repo) };
-    trace(L"[->N] {:t}", node);
+    trace(Bind, L"[->N] {:t}", node);
     ASTNode ret = node;
     if (node->status < ASTStatus::Normalized) {
         size_t stack_size { parser.namespaces.size() };
@@ -156,7 +155,7 @@ ASTNode normalize(ASTNode node)
             ret->status = ASTStatus::Normalized;
         }
     }
-    trace(L"[N->] {:t}", ret);
+    trace(Bind, L"[N->] {:t}", ret);
     return ret;
 }
 
@@ -189,7 +188,7 @@ BindResult bind(ASTNode node)
             parser.push_namespace(node);
         }
         parser.node_stack.emplace_back(node);
-        // info(L"Binding {}", MUST_EVAL(Util::to_wstring(SyntaxNodeType_name(node->type()))));
+        trace(Bind, L"Binding {}", MUST_EVAL(Util::to_wstring(SyntaxNodeType_name(node->type()))));
         auto retval = std::visit(
             [&node](auto const impl) {
                 auto id { node->id.id.value() };

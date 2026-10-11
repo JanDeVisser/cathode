@@ -9,6 +9,7 @@
 #include <locale.h>
 #include <optional>
 #include <print>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -26,10 +27,9 @@
 
 #include <Lang/Config.h>
 #include <Lang/Parser.h>
+#include <Lang/QBE/QBE.h>
 #include <Lang/SyntaxNode.h>
 #include <Lang/Type.h>
-
-#include <Lang/QBE/QBE.h>
 
 namespace Lang {
 
@@ -95,7 +95,6 @@ struct Builder {
     Parser         parser { };
     QBE::ILProgram program;
     std::wstring   source_text;
-    bool           verbose { false };
 
     bool analyze()
     {
@@ -284,7 +283,6 @@ private:
         : app_dir(cathode_dir())
         , source(std::move(root))
         , program_name(root.stem().string())
-        , verbose(log_config.level == LogLevel::Trace)
     {
     }
 
@@ -296,7 +294,6 @@ private:
             assert(!__s.empty());
             __s[0].stem().string();
         }))
-        , verbose(log_config.level == LogLevel::Trace)
     {
     }
 
@@ -353,9 +350,25 @@ int main(int argc, char const **argv)
 {
     setlocale(LC_ALL, "en_US.UTF-8");
     auto arg_ix = parse_options(argc, argv);
-    set_logging_config(LoggingConfig { has_option("trace") ? LogLevel::Trace : (has_option("verbose") ? LogLevel::Info : LogLevel::Error) });
-    trace("Tracing is ON");
-    info("Verbose mode is ON");
+    auto const &logger { Logger::get_logger() };
+    switch (logger.level) {
+    case LogLevel::Trace: {
+        if (logger.all_enabled) {
+            info("Tracing ON: all");
+        } else {
+            std::stringstream ss;
+            for (auto const &cat : logger.categories) {
+                ss << cat << " ";
+            }
+            info("Tracing is ON: ", ss.str());
+        }
+    } break;
+    case LogLevel::Info:
+        info("Verbose mode is ON");
+        break;
+    default:
+        break;
+    }
     if (arg_ix == argc) {
         if (has_option("version")) {
             version();

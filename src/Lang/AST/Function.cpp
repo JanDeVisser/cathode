@@ -123,7 +123,7 @@ BindResult Call::bind(ASTNode const &n) const
     assert(n != nullptr);
     auto &parser = *(n.repo);
     if (function != nullptr) {
-        trace(L"Call `{}` already resolved", function->bound_type);
+        trace(Bind, L"Call `{}` already resolved", function->bound_type);
         auto f { function };
         if (f->status == ASTStatus::Initialized) {
             f = normalize(f);
@@ -156,7 +156,7 @@ BindResult Call::bind(ASTNode const &n) const
         name = join(callable_list.identifiers, L"."sv);
     }
 
-    trace(L"Resolving `{}({})`", name, arg_types);
+    trace(Bind, L"Resolving `{}({})`", name, arg_types);
     // function = parser.find_function_by_arg_list(id->identifier, arg_types);
     // if (function != nullptr) {
     //     return std::get<FunctionType>(function->bound_type->description).result;
@@ -169,9 +169,9 @@ BindResult Call::bind(ASTNode const &n) const
         if (decl.generics.empty()) {
             auto const &func_type_descr = get<FunctionType>(def.declaration->bound_type);
             auto const &func_params_descr = get<TypeList>(func_type_descr.parameters);
-            trace(L"Matching `{}({})` with definition `{}`", name, arg_types, def.declaration->bound_type);
+            trace(Bind, L"Matching `{}({})` with definition `{}`", name, arg_types, def.declaration->bound_type);
             if (type_descr.types.size() != func_params_descr.types.size()) {
-                trace("Param count mismatch");
+                trace(Bind, "Param count mismatch");
                 return nullptr;
             }
             ASTNodes reference_nodes;
@@ -181,11 +181,11 @@ BindResult Call::bind(ASTNode const &n) const
                 auto arg_value = arg_type->value_type();
                 auto param_value = param_type->value_type();
                 if (arg_value != param_value) {
-                    trace(L"Param {}: `{}` incompatible with `{}`", ix, arg_type, param_type);
+                    trace(Bind, L"Param {}: `{}` incompatible with `{}`", ix, arg_type, param_type);
                     return nullptr;
                 }
                 if (is<ReferenceType>(param_type) && is_constant(arg)) {
-                    trace("Param {}: cannot take a reference of a constant", ix);
+                    trace(Bind, "Param {}: cannot take a reference of a constant", ix);
                     return nullptr;
                 }
                 if (is<ReferenceType>(param_type) && !is<ReferenceType>(arg_type)) {
@@ -263,16 +263,16 @@ BindResult Call::bind(ASTNode const &n) const
         if (type_args.empty()) {
             for (auto const &func_def : bound_overloads) {
                 if (auto const ret = match_non_generic_function(func_def); !ret.has_value()) {
-                    trace(L"NO MATCH");
+                    trace(Bind, "NO MATCH");
                     return BindError { ret.error() };
                 } else if (ret.value() != nullptr) {
                     f = ret.value();
-                    trace(L"We have a match");
+                    trace(Bind, "We have a match");
                     break;
                 }
             }
             if (f == nullptr) {
-                trace(L"Checking generic functions???");
+                trace(Bind, "Checking generic functions???");
                 for (auto const &func_def : bound_overloads) {
                     if (auto const ret = match_generic_function(func_def); !ret.has_value()) {
                         return BindError { ret.error() };
@@ -294,7 +294,7 @@ BindResult Call::bind(ASTNode const &n) const
         }
     }
     if (f != nullptr) {
-        trace(L"Found function");
+        trace(Bind, "Found function");
         auto const &func { get<FunctionDefinition>(f) };
         auto const &func_type_descr { get<FunctionType>(func.declaration->bound_type) };
         auto const &param_types { get<TypeList>(func_type_descr.parameters).types };
@@ -307,10 +307,10 @@ BindResult Call::bind(ASTNode const &n) const
         return func_type_descr.result;
     }
     if (parser.pass == 0) {
-        trace(L"Unresolved function (Pass 0)");
+        trace(Bind, "Unresolved function (Pass 0)");
         return BindError { ASTStatus::Undetermined };
     }
-    trace(L"Unresolved function. Pass > 0. This is an error");
+    trace(Bind, "Unresolved function. Pass > 0. This is an error");
     return n.bind_error(L"Unresolved function `{}{}`", name, arg_types->to_string());
 }
 

@@ -86,16 +86,16 @@ DLResult<LibHandle> Resolver::Library::try_open(fs::path const &dir) const
     std::string path_string;
     if (!image.empty()) {
         fs::path const path { dir / image };
-        trace("Attempting to open library '{}'", path.string());
+        trace(Resolve, "Attempting to open library '{}'", path.string());
         path_string = path.string();
         p = path_string.c_str();
     } else {
-        trace("Attempting to open main program module");
+        trace(Resolve, "Attempting to open main program module");
     }
     dlerror();
     if (auto const lib_handle = dlopen(p, RTLD_NOW | RTLD_GLOBAL); lib_handle) {
         dlerror();
-        trace("Successfully opened '{}'", (p) ? p : "main program module");
+        trace(Resolve, "Successfully opened '{}'", (p) ? p : "main program module");
         return LibHandle { lib_handle };
     }
     return std::unexpected<DLError>(std::in_place_t { });
@@ -105,9 +105,9 @@ DLResult<LibHandle> Resolver::Library::open()
 {
     auto image = platform_image(m_image);
     if (!image.empty()) {
-        trace("resolve_open('{}') ~ '{}'", m_image, image.string());
+        trace(Resolve, "resolve_open('{}') ~ '{}'", m_image, image.string());
     } else {
-        trace("resolve_open('Main Program Image')");
+        trace(Resolve, "resolve_open('Main Program Image')");
     }
     DLResult<LibHandle> ret { std::unexpected<DLError>(std::in_place_t { }) };
     m_handle = nullptr;
@@ -158,10 +158,10 @@ DLResult<LibHandle> Resolver::Library::open()
             auto result = get_function(CATHODE_INIT);
             if (result.has_value()) {
                 if (auto func_ptr = result.value(); func_ptr != nullptr) {
-                    trace("resolve_open('{}') Executing initializer", to_string());
+                    trace(Resolve, "resolve_open('{}') Executing initializer", to_string());
                     (func_ptr)();
                 } else {
-                    trace("resolve_open('{}') No initializer", to_string());
+                    trace(Resolve, "resolve_open('{}') No initializer", to_string());
                 }
             } else {
                 log_error("resolve_open('{}') Error finding initializer: {}",
@@ -170,7 +170,7 @@ DLResult<LibHandle> Resolver::Library::open()
                 return std::unexpected<DLError>(result.error());
             }
         }
-        trace("Library '{}' opened successfully", to_string());
+        trace(Resolve, "Library '{}' opened successfully", to_string());
     } else {
         log_error("Resolver::Library::open('{}') FAILED", to_string());
         m_my_result = ret.error();
@@ -186,7 +186,7 @@ DLResult<void_t> Resolver::Library::get_function(std::string const &function_nam
     if (m_functions.contains(function_name)) {
         return m_functions[function_name];
     }
-    trace("dlsym('{}', '{}')", to_string(), function_name);
+    trace(Resolve, "dlsym('{}', '{}')", to_string(), function_name);
     if (auto const function = dlsym(m_handle.handle, function_name.c_str()); function != nullptr) {
         auto const func_ptr = reinterpret_cast<void_t>(function);
         m_functions[function_name] = func_ptr;

@@ -31,7 +31,7 @@ GenResult generate_qbe_node(ASTNode const &n, FunctionDefinition const &impl, QB
 template<>
 GenResult generate_qbe_node(ASTNode const &n, FunctionDeclaration const &impl, QBEContext &ctx)
 {
-    trace(L"Generating function `{}` -> {}", impl.name, get<TypeType>(impl.return_type->bound_type).type->to_string());
+    trace(QBE, L"Generating function `{}` -> {}", impl.name, get<TypeType>(impl.return_type->bound_type).type->to_string());
     auto _ = generate_qbe_nodes(impl.parameters, ctx);
     return QBEOperand { n, ILValue::null() };
 }

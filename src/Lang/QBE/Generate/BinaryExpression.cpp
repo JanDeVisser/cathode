@@ -81,7 +81,7 @@ GenResult generate_qbe_node(ASTNode const &n, BinaryExpression const &impl, QBEC
 {
     assert(impl.lhs->bound_type != nullptr);
     assert(impl.rhs->bound_type != nullptr);
-    trace(L"Generating BinExpr {} {} {}", impl.lhs->bound_type->name, as_wstring(Operator_name(impl.op)), impl.rhs->bound_type->name);
+    trace(QBE, L"Generating BinExpr {} {} {}", impl.lhs->bound_type->name, as_wstring(Operator_name(impl.op)), impl.rhs->bound_type->name);
 
     if (impl.op == Operator::Assign) {
         return assign(TRY_GENERATE(impl.lhs, ctx), impl.rhs, ctx);
@@ -92,7 +92,7 @@ GenResult generate_qbe_node(ASTNode const &n, BinaryExpression const &impl, QBEC
     if (!res) {
         return std::unexpected(res.error());
     }
-    trace(L"binexpr {} {} {}", res.value().lhs.get_value(), as_wstring(Operator_name(res.value().op)), res.value().rhs.get_value());
+    trace(QBE, L"binexpr {} {} {}", res.value().lhs.get_value(), as_wstring(Operator_name(res.value().op)), res.value().rhs.get_value());
     return qbe_operator(res.value(), ctx);
 }
 

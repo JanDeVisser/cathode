@@ -121,14 +121,14 @@ void QBEContext::add_operation(ILInstructionImpl impl)
         // }
         // trace(L"Added label {} -> {}: {} {} {} {}", label_def.label, n, l[0], l[1], l[2], l[3]);
     }
-    if (trace_on()) {
+    if (trace_on(QBE)) {
         std::wstringstream s;
         std::visit(
             [&s](auto const &i) -> void {
                 s << i;
             },
             impl);
-        trace(L"QBE {}", s.str());
+        trace(QBE, L"QBE {}", s.str());
     }
     function.instructions.emplace_back(std::move(impl));
 }

@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include <Util/Defer.h>
+#include <Util/Error.h>
 #include <Util/Logging.h>
 
 namespace Util {

@@ -104,7 +104,7 @@ struct Parser {
         nodes.push_back(impl);
         ASTNode ret = { this };
         nodes.back().id = ret;
-        trace(L"[C] {}", ret);
+        trace(Nodes, L"[C] {}", ret);
         return ret;
     }
 
@@ -113,7 +113,7 @@ struct Parser {
         nodes.push_back(ASTNodeImpl { std::move(impl) });
         ASTNode ret = { this };
         nodes.back().id = ret;
-        trace(L"[C] {}", ret);
+        trace(Nodes, L"[C] {}", ret);
         return ret;
     }
 
@@ -123,7 +123,7 @@ struct Parser {
         ASTNode ret = { this };
         nodes.back().id = ret;
         nodes.back().location = std::move(loc);
-        trace(L"[C] {}", ret);
+        trace(Nodes, L"[C] {}", ret);
         return ret;
     }
 
@@ -134,7 +134,7 @@ struct Parser {
         ASTNode ret = { this };
         nodes.back().id = ret;
         nodes.back().location = std::move(loc);
-        trace(L"[C] {}", ret);
+        trace(Nodes, L"[C] {}", ret);
         return ret;
     }
 

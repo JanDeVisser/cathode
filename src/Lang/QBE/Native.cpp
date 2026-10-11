@@ -93,7 +93,7 @@ bool native_call_arm64(std::string_view name, void *params, std::vector<ILType> 
         } else if (float_reg >= 8) {
             fatal("Can only pass arguments in registers now");
         }
-        trace(L"Allocating register from 0x{:016x}", reinterpret_cast<intptr_t>(from + offset));
+        trace(Eval, L"Allocating register from 0x{:016x}", reinterpret_cast<intptr_t>(from + offset));
         switch (bt) {
         case ILBaseType::B:
         case ILBaseType::SB:
@@ -155,17 +155,17 @@ bool native_call_arm64(std::string_view name, void *params, std::vector<ILType> 
             type.inner);
     }
 
-    trace("Trampoline:");
-    trace("  Function: {}", reinterpret_cast<intptr_t>(t.fnc));
-    trace("  Integer Registers:");
+    trace(Eval, "Trampoline:");
+    trace(Eval, "  Function: {}", reinterpret_cast<intptr_t>(t.fnc));
+    trace(Eval, "  Integer Registers:");
     for (auto ix = 0; ix < 6; ++ix) {
-        trace("    {}: 0x{:016x}", ix, t.x[ix]);
+        trace(Eval, "    {}: 0x{:016x}", ix, t.x[ix]);
     }
 
     if (auto const trampoline_result = trampoline(&t); trampoline_result) {
         fatal("Error executing `{}`. Trampoline returned {}", name, trampoline_result);
     }
-    trace("  Integer result: {}", t.int_return_value);
+    trace(Eval, "  Integer result: {}", t.int_return_value);
 
     std::visit(
         overloads {
@@ -556,7 +556,7 @@ bool native_call_x86_64(std::string_view name, uint8_t *params, std::vector<ILTy
         } else if (float_reg >= 8) {
             fatal("Can only pass arguments in registers now");
         }
-        trace(L"Allocating register from 0x{:016x}", reinterpret_cast<intptr_t>(from + offset));
+        trace(Eval, L"Allocating register from 0x{:016x}", reinterpret_cast<intptr_t>(from + offset));
         switch (bt) {
         case ILBaseType::B:
         case ILBaseType::SB:
@@ -621,17 +621,17 @@ bool native_call_x86_64(std::string_view name, uint8_t *params, std::vector<ILTy
             type.inner);
     }
 
-    trace("Trampoline:");
-    trace("  Function: {}", reinterpret_cast<intptr_t>(t.fnc));
-    trace("  Integer Registers:");
+    trace(Eval, "Trampoline:");
+    trace(Eval, "  Function: {}", reinterpret_cast<intptr_t>(t.fnc));
+    trace(Eval, "  Integer Registers:");
     for (auto ix = 0; ix < 6; ++ix) {
-        trace("    {}: 0x{:016x}", ix, t.int_regs[ix]);
+        trace(Eval, "    {}: 0x{:016x}", ix, t.int_regs[ix]);
     }
 
     if (auto const trampoline_result = trampoline(&t); trampoline_result) {
         fatal("Error executing `{}`. Trampoline returned {}", name, trampoline_result);
     }
-    trace("  Integer result: {}", t.int_return_value[0]);
+    trace(Eval, "  Integer result: {}", t.int_return_value[0]);
 
     auto sz = size_of(return_type);
     if (sz > 0 && sz <= 16) {

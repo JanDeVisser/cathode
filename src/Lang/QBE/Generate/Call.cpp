@@ -21,7 +21,7 @@ GenResult generate_qbe_node(ASTNode const &n, Call const &impl, QBEContext &ctx)
     size_t               alloc_sz { 0 };
     std::vector<ILValue> args;
 
-    trace(L"Generating call to `{}`", impl.callable);
+    trace(QBE, L"Generating call to `{}`", impl.callable);
     if (n->bound_type != TypeRegistry::void_) {
         alloc_sz = std::visit(
             overloads {
@@ -47,15 +47,15 @@ GenResult generate_qbe_node(ASTNode const &n, Call const &impl, QBEContext &ctx)
     }
 
     for (auto const &[arg, param] : std::ranges::views::zip(get<ArgumentList>(impl.arguments).arguments, decl.parameters)) {
-        trace(L"  Argument `{}`: {} param type {}", get<Parameter>(param).name, arg->bound_type->name, param->bound_type->name);
+        trace(QBE, L"  Argument `{}`: {} param type {}", get<Parameter>(param).name, arg->bound_type->name, param->bound_type->name);
         if (is<ReferenceType>(param->bound_type)) {
-            trace("param is reference");
+            trace(QBE, "param is reference");
             QBE_ASSERT(is<ReferenceType>(arg->bound_type), ctx);
             auto value = TRY_GENERATE(arg, ctx).get_value();
             value.type = ILBaseType::L;
             args.emplace_back(value);
         } else if (is<ReferenceType>(arg->bound_type) && !qbe_first_class_type(param->bound_type)) {
-            trace("param not reference, arg is reference");
+            trace(QBE, "param not reference, arg is reference");
             auto temp { ctx.add_temporary(param->bound_type) };
             auto arg_alloc { ILValue::temporary(temp.index, param->bound_type) };
             auto ptr { ILValue::local(++ctx.next_var, ILBaseType::L) };
@@ -72,7 +72,7 @@ GenResult generate_qbe_node(ASTNode const &n, Call const &impl, QBEContext &ctx)
                 });
             args.emplace_back(arg_alloc);
         } else {
-            trace("param not reference, arg not reference");
+            trace(QBE, "param not reference, arg not reference");
             auto operand { TRY_GENERATE(arg, ctx) };
             auto arg_value { TRY_DEREFERENCE(operand, ctx) };
             auto materialized { TRY_MATERIALIZE(arg_value, ctx) };

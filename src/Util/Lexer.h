@@ -786,7 +786,6 @@ public:
 
     Bookmark bookmark() const
     {
-        trace("Bookmarking token #{}", m_lookback.size());
         return m_lookback.size();
     }
 

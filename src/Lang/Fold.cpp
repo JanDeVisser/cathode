@@ -5,15 +5,13 @@
  */
 
 #include <cstdint>
-#include <string>
-#include <utility>
+
+#include <Util/Logging.h>
 
 #include <Lang/Operator.h>
 #include <Lang/Parser.h>
 #include <Lang/SyntaxNode.h>
-
-#include "Lang/Type.h"
-#include "Util/Logging.h"
+#include <Lang/Type.h>
 
 namespace Lang {
 
@@ -81,7 +79,7 @@ template<>
 FoldResult evaluate_Divide(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
 {
     if (get<uint64_t>(rhs) == 0) {
-        fatal("Division by zero");
+        fatal(L"Division by zero");
     }
     return evaluate_op(lhs, rhs,
         [](auto x, auto y) { return x / y; });
@@ -91,7 +89,7 @@ template<>
 FoldResult evaluate_Modulo(ASTNode const &, Number const &lhs, ASTNode const &, Number const &rhs)
 {
     if (get<uint64_t>(rhs) == 0) {
-        fatal("Division by zero");
+        fatal(L"Division by zero");
     }
     return evaluate_op(lhs, rhs,
         [](auto x, auto y) { return x % y; });
@@ -270,7 +268,6 @@ FoldResult evaluate_Cast(ASTNode const &, Number const &number, ASTNode &type_no
 
 FoldResult evaluate_Cast(ASTNode const &tag_node, Tag const &tag, ASTNode &type_node, TypeSpecification const &)
 {
-    auto &parser { *(tag_node.repo) };
     if (auto const type = resolve(type_node); type != nullptr) {
         if (is<IntType>(type)) {
             auto const &int_type { get<IntType>(type) };

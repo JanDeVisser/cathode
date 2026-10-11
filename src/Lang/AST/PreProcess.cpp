@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <filesystem>
 #include <string>
 
 #include <Util/StringUtil.h>
@@ -20,7 +19,6 @@
 
 namespace Lang {
 
-namespace fs = std::filesystem;
 using namespace std::literals;
 
 Comptime::Comptime(std::wstring_view script_text, ASTNode const &block, std::wstring_view output)
@@ -59,7 +57,7 @@ ASTNode Comptime::normalized(ASTNode const &n) const
     normalize(synthetic_def);
 
     script = normalize(synthetic_def);
-    trace("@comptime block parsed");
+    trace(PreProc, "@comptime block parsed");
     return make_node<Comptime>(n, script_text, script);
 }
 
@@ -88,10 +86,10 @@ BindResult Comptime::bind(ASTNode const &n) const
             case ASTStatus::Normalized:
                 UNREACHABLE();
             case ASTStatus::Bound:
-                trace(L"Comptime script bind successful");
+                trace(PreProc, L"Comptime script bind successful");
                 break;
             }
-            trace("Bound compile time script");
+            trace(PreProc, "Bound compile time script");
         }
     }
 
@@ -103,18 +101,20 @@ BindResult Comptime::bind(ASTNode const &n) const
             auto &file = program.files[0];
             auto &function = file.functions[0];
             if (trace_on()) {
-                trace("Compile time block IR:");
-                std::wcerr << file;
-                trace("---------------------------------------------------");
+                trace(PreProc, "Compile time block IR:");
+                if (trace_on(PreProc)) {
+                    std::wcerr << file;
+                }
+                trace(PreProc, "---------------------------------------------------");
             }
             QBE::VM vm { program };
             if (auto exec_res = execute_qbe(vm, file, function, { }); !res.has_value()) {
                 return parser.bind_error(n->location, res.error());
             } else {
                 auto const output_val = exec_res.value();
-                trace("@comptime block executed");
+                trace(PreProc, "@comptime block executed");
                 auto output_string { static_cast<std::wstring>(output_val) };
-                trace(L"@comptime output: {}", output_string);
+                trace(PreProc, L"@comptime output: {}", output_string);
                 auto new_node = make_node<Comptime>(n, std::wstring { script_text }, statements, output_string);
                 new_node->status = ASTStatus::Normalized;
                 return Lang::bind(new_node);
@@ -123,12 +123,12 @@ BindResult Comptime::bind(ASTNode const &n) const
     }
 
     if (auto parsed_output = parse<Block>(*(n.repo), output); parsed_output) {
-        trace("@comptime after parsing");
+        trace(PreProc, "@comptime after parsing");
         if (trace_on()) {
             dump(parsed_output, std::wcerr);
         }
         auto new_node { make_node<Comptime>(n, std::wstring { script_text }, normalize(parsed_output), std::wstring { output }) };
-        trace("@comptime after normalizing");
+        trace(PreProc, "@comptime after normalizing");
         auto new_comptime { get<Comptime>(new_node) };
         if (trace_on()) {
             dump(new_comptime.statements, std::wcerr);

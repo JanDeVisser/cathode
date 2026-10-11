@@ -22,7 +22,7 @@ static intptr_t raw_assign(ILValue const &lhs, ILValue const &rhs, pType const &
 template<class T>
 intptr_t raw_assign(ILValue const &lhs, ILValue const &rhs, T const &, QBEContext &ctx)
 {
-    trace(L"raw_assign({})", demangle<T>());
+    trace(Eval, L"raw_assign({})", demangle<T>());
     ctx.add_operation(
         StoreDef {
             rhs,
@@ -345,7 +345,7 @@ GenResult assign(QBEOperand const &lhs, ASTNode const &rhs, QBEContext &ctx)
                     });
             },
             [&ctx, &lhs, &rhs_value](auto const &lhs_descr, auto const &rhs_descr) {
-                trace(L"generic assign({}, {})", demangle<decltype(lhs_descr)>(), demangle<decltype(rhs_descr)>());
+                trace(Eval, L"generic assign({}, {})", demangle<decltype(lhs_descr)>(), demangle<decltype(rhs_descr)>());
                 raw_assign(lhs.get_value(), rhs_value.get_value(), lhs.ptype, ctx);
             } },
         lhs.ptype->description, rhs->bound_type->description);

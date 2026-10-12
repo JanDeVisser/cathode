@@ -180,7 +180,7 @@ struct Builder {
         }
         if (auto source_text_maybe = std::visit(
                 overloads {
-                    [this](fs::path const &p) -> std::optional<std::wstring> {
+                    [](fs::path const &p) -> std::optional<std::wstring> {
                         if (fs::is_directory(p)) {
                             return load_directory(p);
                         } else if (fs::is_regular_file(p)) {
@@ -190,7 +190,7 @@ struct Builder {
                             return { };
                         }
                     },
-                    [this](std::vector<fs::path> const &paths) -> std::optional<std::wstring> {
+                    [](std::vector<fs::path> const &paths) -> std::optional<std::wstring> {
                         return load_files(paths);
                     } },
                 source);
@@ -350,7 +350,10 @@ int main(int argc, char const **argv)
 {
     setlocale(LC_ALL, "en_US.UTF-8");
     auto arg_ix = parse_options(argc, argv);
-    auto const &logger { Logger::get_logger() };
+    auto &logger { Logger::get_logger() };
+    if (auto verbose = get_option("verbose"); verbose.has_value()) {
+        logger.level = LogLevel::Info;
+    }
     switch (logger.level) {
     case LogLevel::Trace: {
         if (logger.all_enabled) {
@@ -360,13 +363,14 @@ int main(int argc, char const **argv)
             for (auto const &cat : logger.categories) {
                 ss << cat << " ";
             }
-            info("Tracing is ON: ", ss.str());
+            info("Tracing is ON: {}", ss.str());
         }
     } break;
     case LogLevel::Info:
         info("Verbose mode is ON");
         break;
     default:
+        std::cout << "Log level: " << logger.level << "\n";
         break;
     }
     if (arg_ix == argc) {

@@ -6,11 +6,10 @@
 
 #pragma once
 
+#include <cassert>
 #include <cstddef>
 #include <optional>
 #include <vector>
-
-#include <Util/Logging.h>
 
 template<class T, class Repo = std::vector<T>>
 class Ptr {

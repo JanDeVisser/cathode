@@ -7,11 +7,14 @@
 #pragma once
 
 #include <cstring>
+#include <filesystem>
 #include <format>
 #include <iostream>
 #include <mutex>
+#include <ostream>
 #include <set>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #ifdef assert
@@ -24,6 +27,8 @@
 #define ENUMPAYLOAD(V, Payload) Payload,
 
 namespace Util {
+
+namespace fs = std::filesystem;
 
 template<class... Ts>
 struct overloads : Ts... {
@@ -39,74 +44,60 @@ template<class T>
 concept numeric_or_bool = std::is_integral_v<T> || std::is_floating_point_v<T> || std::is_same_v<T, bool>;
 
 #define ENUMERATE_LOG_LEVELS(S) \
-    S(None, 0)                  \
-    S(Trace, 1)                 \
-    S(Info, 2)                  \
-    S(Warning, 3)               \
-    S(Error, 4)                 \
-    S(Fatal, 5)
+    S(None, 0, 0)               \
+    S(Trace, 1, 0)              \
+    S(Info, 2, 92)              \
+    S(Warning, 3, 93)           \
+    S(Error, 4, 91)             \
+    S(Fatal, 5, 31)
 
 enum class LogLevel {
 #undef S
-#define S(level, cardinal) level = cardinal,
+#define S(level, cardinal, color) level = cardinal,
     ENUMERATE_LOG_LEVELS(S)
 #undef S
 };
 
 char const             *LogLevel_name(LogLevel);
+std::ostream           &operator<<(std::ostream &os, LogLevel level);
 std::optional<LogLevel> LogLevel_by_name(std::string_view const &);
 
 class Logger;
 struct LogCategory;
 
-template<typename T>
-struct LogMessage {
+struct LogMessageMeta {
     std::string_view file;
     size_t           line;
     std::string_view function;
     std::string_view category;
     LogLevel         level;
-    T const         *message;
+
+    std::string file_name() const
+    {
+        fs::path path { file };
+        auto     ret = path.stem().string();
+        if (ret.length() > 19) {
+            return ret.substr(0, 19);
+        }
+        return ret;
+    }
 };
 
-template<typename T, typename... Args>
-std::basic_string<T> format_message(LogMessage<T> const &, Args const &...)
+inline std::ostream &operator<<(std::ostream &os, LogMessageMeta const &meta)
 {
-    std::unreachable();
-}
-
-template<typename... Args>
-inline std::basic_string<char> format_message(LogMessage<char> const &msg, Args const &...args)
-{
-    return std::vformat(msg.message, std::make_format_args(args...));
-}
-
-template<typename... Args>
-inline std::basic_string<wchar_t> format_message(LogMessage<wchar_t> const &msg, Args const &...args)
-{
-    return std::vformat(msg.message, std::make_wformat_args(args...));
+    if (meta.level == LogLevel::Trace) {
+        auto f { meta.file_name() };
+        os << f << ':'
+           << std::left << std::setw(24 - f.length() - 1) << meta.line << ':'
+           << std::setw(20) << meta.function << ':'
+           << std::setw(5) << LogLevel_name(meta.level) << ':';
+    } else {
+        os << meta.level;
+    }
+    return os;
 }
 
 extern std::mutex g_logging_mutex;
-
-template<typename T>
-void print_message(std::basic_string<T> const &)
-{
-}
-
-template<>
-inline void print_message(std::string const &msg)
-{
-    std::cerr << msg << std::endl;
-    std::cerr.flush();
-}
-
-template<>
-inline void print_message(std::wstring const &msg)
-{
-    std::wcerr << msg << std::endl;
-    std::wcerr.flush();
-}
 
 class Logger {
 public:
@@ -115,70 +106,76 @@ public:
         return !category.empty() && (categories.contains(category) || all_enabled);
     }
 
-    template<typename T>
-    bool trace_on(LogMessage<T> const &msg) const
+    bool trace_on(LogMessageMeta const &msg) const
     {
         return trace_on(msg.category);
     }
 
-    template<typename T, typename... Args>
-    void logmsg(LogMessage<T> const &msg, Args const &...args)
+    template<typename... Args>
+    void logmsg(LogMessageMeta const &meta, char const *fmt, Args const &...args)
     {
         std::lock_guard<std::mutex> const lock(g_logging_mutex);
-        if (msg.level < level || (msg.level == LogLevel::Trace && !trace_on(msg))) {
+        if (meta.level < level || (meta.level == LogLevel::Trace && !trace_on(meta))) {
             return;
         }
-        std::string_view f(msg.file);
-        if (f.front() == '/') {
-            auto ix = f.find_last_of('/');
-            if (ix != std::string_view::npos) {
-                auto len = f.length() - ix - 1;
-                if (len > 19) {
-                    len = 19;
-                }
-                f = f.substr(ix + 1, len);
-            }
+        std::cerr << meta << ' ';
+        std::cerr << std::vformat(fmt, std::make_format_args(args...)) << '\n';
+    }
+
+    template<typename... Args>
+    void logmsg(LogMessageMeta const &meta, wchar_t const *fmt, Args const &...args)
+    {
+        std::lock_guard<std::mutex> const lock(g_logging_mutex);
+        if (meta.level < level || (meta.level == LogLevel::Trace && !trace_on(meta))) {
+            return;
         }
-        auto file_line = std::format("{}:{}", f, msg.line);
-        auto prefix = std::format("{:<24}:{:<20}:{:<5}:", file_line, msg.function, LogLevel_name(msg.level));
-        auto message = format_message(msg, args...);
-        print_message(message);
+        std::cerr << meta << ' ';
+        std::wcerr << std::vformat(fmt, std::make_wformat_args(args...)) << '\n';
     }
 
     template<typename T, typename... Args>
-    void info_msg(std::string_view const &file, size_t line, std::string_view const &function, T const *message, Args &&...args)
+    void logmsg(std::string_view const &file, size_t line, std::string_view const &function, std::string_view const &category, LogLevel level, T const *fmt, Args const &...args)
     {
-        logmsg<T>({ file, line, function, "", LogLevel::Info, message }, std::forward<Args>(args)...);
-        exit(1);
+        logmsg(LogMessageMeta { file, line, function, category, level }, fmt, args...);
     }
 
     template<typename T, typename... Args>
-    void warning_msg(std::string_view const &file, size_t line, std::string_view const &function, T const *message, Args &&...args)
+    void trace_msg(std::string_view const &file, size_t line, std::string_view const &function, std::string_view const &category, T const *fmt, Args const &...args)
     {
-        logmsg<T>({ file, line, function, "", LogLevel::Warning, message }, std::forward<Args>(args)...);
-        exit(1);
+        logmsg(file, line, function, category, LogLevel::Trace, fmt, args...);
     }
 
     template<typename T, typename... Args>
-    void error_msg(std::string_view const &file, size_t line, std::string_view const &function, T const *message, Args &&...args)
+    void info_msg(std::string_view const &file, size_t line, std::string_view const &function, T const *fmt, Args &&...args)
     {
-        logmsg<T>({ file, line, function, "", LogLevel::Error, message }, std::forward<Args>(args)...);
-        exit(1);
+        logmsg(file, line, function, "", LogLevel::Info, fmt, args...);
     }
 
     template<typename T, typename... Args>
-    __attribute__((noreturn)) void fatal_msg(std::string_view const &file, size_t line, std::string_view const &function, T const *message, Args const &...args)
+    void warning_msg(std::string_view const &file, size_t line, std::string_view const &function, T const *fmt, Args &&...args)
     {
-        logmsg<T>(LogMessage<T> { file, line, function, "", LogLevel::Fatal, message }, std::forward<Args const &>(args)...);
+        logmsg(file, line, function, "", LogLevel::Warning, fmt, args...);
+    }
+
+    template<typename T, typename... Args>
+    void error_msg(std::string_view const &file, size_t line, std::string_view const &function, T const *fmt, Args &&...args)
+    {
+        logmsg(file, line, function, "", LogLevel::Error, fmt, args...);
+    }
+
+    template<typename T, typename... Args>
+    __attribute__((noreturn)) void fatal_msg(std::string_view const &file, size_t line, std::string_view const &function, T const *fmt, Args const &...args)
+    {
+        logmsg(file, line, function, "", LogLevel::Fatal, fmt, std::forward<Args const &>(args)...);
         abort();
     }
 
     template<typename T, typename... Args>
-    void assert_msg(std::string_view const &file, size_t line, std::string_view const &function, bool condition, T const *message, Args const &...args)
+    void assert_msg(std::string_view const &file, size_t line, std::string_view const &function, bool condition, T const *fmt, Args const &...args)
     {
         if (condition)
             return;
-        logmsg<T>(LogMessage<T> { file, line, function, "", LogLevel::Fatal, message }, std::forward<Args const &>(args)...);
+        logmsg(file, line, function, "", LogLevel::Fatal, fmt, std::forward<Args const &>(args)...);
         abort();
     }
 
@@ -193,67 +190,9 @@ private:
     Logger();
 };
 
-struct LogCategory {
-public:
-    std::string name {};
-
-    LogCategory(std::string_view name) noexcept;
-    LogCategory(LogCategory const &) = default;
-
-    template<typename T, typename... Args>
-    void logmsg(LogMessage<T> const &msg, Args &&...args)
-    {
-        Logger::get_logger().logmsg(msg, std::forward<Args>(args)...);
-    }
-
-    template<typename T, typename... Args>
-    void trace_msg(std::string_view const &file, size_t line, std::string_view const &function, T const *message, Args &&...args)
-    {
-        Logger::get_logger().logmsg<T>({ file, line, function, name, LogLevel::Trace, message }, std::forward<Args>(args)...);
-    }
-
-    template<typename T, typename... Args>
-    void info_msg(std::string_view const &file, size_t line, std::string_view const &function, T const *message, Args &&...args)
-    {
-        Logger::get_logger().logmsg<T>({ file, line, function, name, LogLevel::Info, message }, std::forward<Args>(args)...);
-    }
-
-    template<typename T, typename... Args>
-    void warning_msg(std::string_view const &file, size_t line, std::string_view const &function, T const *message, Args &&...args)
-    {
-        Logger::get_logger().logmsg(LogMessage<char> { file, line, function, name, LogLevel::Warning, message }, std::forward<Args>(args)...);
-    }
-
-    template<typename T, typename... Args>
-    void error_msg(std::string_view const &file, size_t line, std::string_view const &function, T const *message, Args &&...args)
-    {
-        Logger::get_logger().logmsg({ file, line, function, name, LogLevel::Error, message }, std::forward<Args>(args)...);
-    }
-
-    static std::clock_t start();
-
-    template<typename T, typename... Args>
-    void log_duration(std::clock_t clock_start, std::string_view const &file, size_t line, std::string_view const &caller, T const *msg, Args &&...args)
-    {
-        auto clock_end = std::clock();
-        auto duration_ms = (unsigned long) (1000.0 * ((float) clock_end - (float) clock_start) / CLOCKS_PER_SEC);
-
-        auto       msg_with_timing = std::basic_string<T>(msg).append(" {d}.{03d} sec");
-        LogMessage log_message {
-            file,
-            line,
-            caller,
-            name,
-            LogLevel::Trace,
-            msg_with_timing,
-        };
-        logmsg(log_message, std::forward<Args>(args)..., duration_ms / 1000, duration_ms % 1000);
-    }
-};
-
-#define trace(module, fmt, args...)                                                      \
-    do {                                                                                 \
-        Util::LogCategory(#module).trace_msg(__FILE__, __LINE__, __func__, fmt, ##args); \
+#define trace(module, fmt, args...)                                                               \
+    do {                                                                                          \
+        Util::Logger::get_logger().trace_msg(__FILE__, __LINE__, __func__, #module, fmt, ##args); \
     } while (false)
 
 #define trace_on(module) (Util::Logger::get_logger().trace_on(#module))
@@ -278,20 +217,14 @@ public:
         Util::Logger::get_logger().fatal_msg(__FILE__, __LINE__, __func__, fmt, ##args); \
     } while (false)
 
-#define log_timestamp_start(module) (Util::LogCategory(#module).start())
-#define log_timestamp_end(module, ts, fmt, ...)                                                 \
-    do {                                                                                        \
-        Util::LogCategory(#module).log_duration(ts, __FILE__, __LINE__, __func__, fmt, ##args); \
-    } while (true)
-
 #define assert(condition)                                                                                                 \
     do {                                                                                                                  \
         Util::Logger::get_logger().assert_msg(__FILE__, __LINE__, __func__, condition, "Assertion error: {}" #condition); \
     } while (false)
 
-#define assert_with_msg(condition, fmt, args...)                                                                                          \
-    do {                                                                                                                                  \
-        Util::Logger::get_logger().assert_msg(__FILE__, __LINE__, __func__, condition, L"Assertion error: " #condition ": " fmt, ##args); \
+#define assert_with_msg(condition, fmt, args...)                                                                                         \
+    do {                                                                                                                                 \
+        Util::Logger::get_logger().assert_msg(__FILE__, __LINE__, __func__, condition, "Assertion error: " #condition ": " fmt, ##args); \
     } while (false)
 
 #define UNREACHABLE()         \

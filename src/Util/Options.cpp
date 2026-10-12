@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <cctype>
 #include <cstring>
 #include <iostream>
 
@@ -19,37 +18,35 @@ static Options s_options = {};
 
 void set_option(std::string_view option, std::string_view value)
 {
-    //    std::cout << " set_option(" << option << ", " << value << ")";
     s_options.emplace_back(option, value);
+}
+
+std::ostream &operator<<(std::ostream &os, Options const &options)
+{
+    for (auto const &opt : options) {
+        os << opt.first;
+        if (!opt.second.empty()) {
+            os << ": " << opt.second << "\n";
+        }
+    }
+    return os;
 }
 
 int parse_options(int argc, char const **argv)
 {
     auto ix = 1;
-    //    std::cout << "parse_options(" << argc << ")\n";
-    for (; ix < argc && strlen(argv[ix]) > 1 && *argv[ix] == '-'; ++ix) {
-        //        std::cout << "ix: " << ix << " argv: " << argv[ix];
-        std::string_view option = { argv[ix] + 1, 1 };
+    while (ix < argc && strlen(argv[ix]) > 2 && strncmp(argv[ix], "--", 2) == 0) {
+        std::string_view option = argv[ix] + 2;
         std::string_view value = "true";
-        if (strlen(argv[ix]) > 2 && *(argv[ix] + 1) == '-') {
-            option = argv[ix] + 2;
-            char const *equals = strchr(argv[ix] + 2, '=');
-            if (equals) {
-                option = std::string_view(argv[ix] + 2, equals - argv[ix] - 2);
-                value = equals + 1;
-            }
-        } else if (isalpha(*(argv[ix] + 1))) {
-            if (strlen(argv[ix]) > 2) {
-                value = argv[ix] + 2;
-            }
-        } else {
-            //            std::cout << "\n";
-            continue;
+        char const      *equals = strchr(argv[ix] + 2, '=');
+        if (equals) {
+            option = std::string_view(argv[ix] + 2, equals - argv[ix] - 2);
+            value = equals + 1;
         }
         set_option(option, value);
-        //        std::cout << "\n";
+        ++ix;
     }
-    //   std::cout << "arg_ix: " << ix << "\n";
+    // std::cout << s_options;
     return ix;
 }
 
@@ -78,5 +75,4 @@ bool has_option(std::string_view option)
 {
     return get_option(option).has_value();
 }
-
 }

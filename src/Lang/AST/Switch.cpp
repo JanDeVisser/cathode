@@ -121,7 +121,7 @@ BindResult SwitchStatement::bind(ASTNode const &n) const
         auto const &switch_case { get<SwitchCase>(c) };
         if (switch_case.captured_payload != nullptr) {
             if (tagged_union == nullptr) {
-                return n.bind_error(L"Switch type `{}` does not allow a payload capture", switch_type->name);
+                return n.bind_error("Switch type `{}` does not allow a payload capture", as_utf8(switch_type->name));
             }
         }
         pType       binding_type { nullptr };

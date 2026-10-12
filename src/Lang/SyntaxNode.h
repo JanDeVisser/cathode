@@ -154,14 +154,20 @@ struct ASTNode : public Ptr<struct ASTNodeImpl, Parser> {
         error(std::vformat(message.get(), std::make_wformat_args(args...)));
     }
 
-    BindError bind_error(std::wstring const &message) const;
+    BindError bind_error(std::string const &message) const;
     BindError bind_error(LangError error) const;
-    BindError bind_error(wchar_t const *message) const { return bind_error(std::wstring(message)); }
+    BindError bind_error(char const *message) const { return bind_error(std::string(message)); }
+
+    template<typename... Args>
+    BindError bind_error(std::format_string<Args...> const message, Args &&...args) const
+    {
+        return bind_error(std::vformat(message.get(), std::make_format_args(args...)));
+    }
 
     template<typename... Args>
     BindError bind_error(std::wformat_string<Args...> const message, Args &&...args) const
     {
-        return bind_error(std::vformat(message.get(), std::make_wformat_args(args...)));
+        return bind_error(as_utf8(std::vformat(message.get(), std::make_wformat_args(args...))));
     }
 };
 
@@ -1084,10 +1090,10 @@ extern std::vector<BinaryOperator>  binary_ops;
 extern std::vector<UnaryOperator>   unary_ops;
 extern std::map<Operator, Operator> assign_ops;
 
-void         dump(ASTNode const &node, std::wostream &os, int indent = 0);
-void         dump(ASTNodes const &nodes, std::wostream &os, int indent = 0);
-void         header(ASTNode const &node, std::wostream &os);
-std::wstring to_string(ASTNode const &node);
+void         dump(ASTNode const &node, std::ostream &os, int indent = 0);
+void         dump(ASTNodes const &nodes, std::ostream &os, int indent = 0);
+void         header(ASTNode const &node, std::ostream &os);
+std::string  to_string(ASTNode const &node);
 pType        resolve(ASTNode const &type_node);
 ASTNode      normalize(ASTNode node);
 ASTNodes     normalize(ASTNodes nodes);
@@ -1186,7 +1192,7 @@ struct formatter<ASTNode, wchar_t> {
     template<class FmtContext>
     FmtContext::iterator format(ASTNode const &node, FmtContext &ctx) const
     {
-        std::wostringstream out;
+        std::stringstream out;
         header(node, out);
         if (with_type) {
             out << " [" << SyntaxNodeType_name(node->type()) << ']';

@@ -2068,14 +2068,14 @@ void Parser::append(Token const &token, char const *message)
     append(token.location, message);
 }
 
-void Parser::append(TokenLocation location, std::wstring message)
+void Parser::append(TokenLocation location, std::wstring const &message)
 {
-    errors.emplace_back(std::move(location), std::move(message));
+    append(location, message);
 }
 
 void Parser::append(TokenLocation location, std::string const &message)
 {
-    append(std::move(location), MUST_EVAL(to_wstring(message)));
+    errors.emplace_back(std::move(location), message);
 }
 
 void Parser::append(TokenLocation location, wchar_t const *message)
@@ -2085,7 +2085,7 @@ void Parser::append(TokenLocation location, wchar_t const *message)
 
 void Parser::append(TokenLocation location, char const *message)
 {
-    append(std::move(location), MUST_EVAL(to_wstring(message)));
+    append(std::move(location), std::string { message });
 }
 
 BindError Parser::bind_error(LangError const &error)

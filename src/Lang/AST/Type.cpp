@@ -112,7 +112,7 @@ BindResult Enum::bind(ASTNode const &n) const
         if (tagged_value.payload != nullptr) {
             payload = resolve(tagged_value.payload);
             if (payload == nullptr) {
-                return n.bind_error(L"Could not resolve type `{}`", to_string(tagged_value.payload));
+                return n.bind_error("Could not resolve type `{}`", to_string(tagged_value.payload));
             }
         }
         auto sz = tagged_union.tags.size();

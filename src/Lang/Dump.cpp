@@ -4,41 +4,41 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include <ostream>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <type_traits>
 #include <utility>
 
+#include <Util/Error.h>
 #include <Util/StringUtil.h>
 #include <Util/Utf8.h>
 
 #include <Lang/Operator.h>
 #include <Lang/Parser.h>
 #include <Lang/SyntaxNode.h>
-
-#include "Lang/Type.h"
+#include <Lang/Type.h>
 
 namespace Lang {
 
 using namespace std::literals;
 
-void print_indent(std::wostream &os, int indent)
+void print_indent(std::ostream &os, int indent)
 {
-    static std::wstring spaces;
+    static std::string spaces;
     while (spaces.length() < 1024) {
-        spaces += L"    ";
+        spaces += "    "sv;
     }
     os << spaces.substr(0, indent);
 }
 
 template<class N>
-void dump(ASTNode const &, N const &, std::wostream &, int)
+void dump(ASTNode const &, N const &, std::ostream &, int)
 {
 }
 
 template<>
-void dump(ASTNode const &, ArgumentList const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, ArgumentList const &impl, std::ostream &os, int indent)
 {
     print_indent(os, indent);
     os << "#expressions: " << impl.arguments.size() << "\n";
@@ -48,7 +48,7 @@ void dump(ASTNode const &, ArgumentList const &impl, std::wostream &os, int inde
 }
 
 template<>
-void dump(ASTNode const &, BinaryExpression const &impl, std::wostream &os, int const indent)
+void dump(ASTNode const &, BinaryExpression const &impl, std::ostream &os, int const indent)
 {
     dump(impl.lhs, os, indent + 4);
     dump(impl.rhs, os, indent + 4);
@@ -57,7 +57,7 @@ void dump(ASTNode const &, BinaryExpression const &impl, std::wostream &os, int 
 template<class Statements>
     requires std::is_same_v<Statements, Block>
     || std::is_same_v<Statements, Module>
-void dump(ASTNode const &, Statements const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, Statements const &impl, std::ostream &os, int indent)
 {
     print_indent(os, indent);
     os << "#statements: " << impl.statements.size() << "\n";
@@ -67,7 +67,7 @@ void dump(ASTNode const &, Statements const &impl, std::wostream &os, int indent
 }
 
 template<>
-void dump(ASTNode const &, Call const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, Call const &impl, std::ostream &os, int indent)
 {
     dump(impl.callable, os, indent + 4);
     dump(impl.arguments, os, indent + 4);
@@ -78,16 +78,16 @@ void dump(ASTNode const &, Call const &impl, std::wostream &os, int indent)
 }
 
 template<>
-void dump(ASTNode const &, Comptime const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, Comptime const &impl, std::ostream &os, int indent)
 {
     if (impl.statements) {
         dump(impl.statements, os, indent + 4);
     } else if (!impl.output.empty()) {
         print_indent(os, indent + 4);
-        os << impl.output << '\n';
+        os << as_utf8(impl.output) << '\n';
     } else {
         print_indent(os, indent + 4);
-        os << impl.script_text << '\n';
+        os << as_utf8(impl.script_text) << '\n';
     }
 }
 
@@ -95,13 +95,13 @@ template<class StatementWrapper>
     requires std::is_same_v<StatementWrapper, DeferStatement>
     || std::is_same_v<StatementWrapper, LoopStatement>
     || std::is_same_v<StatementWrapper, Yield>
-void dump(ASTNode const &, StatementWrapper const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, StatementWrapper const &impl, std::ostream &os, int indent)
 {
     dump(impl.statement, os, indent + 4);
 }
 
 template<>
-void dump(ASTNode const &, Enum const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, Enum const &impl, std::ostream &os, int indent)
 {
     for (auto const &v : impl.values) {
         dump(v, os, indent + 4);
@@ -109,13 +109,13 @@ void dump(ASTNode const &, Enum const &impl, std::wostream &os, int indent)
 }
 
 template<>
-void dump(ASTNode const &, Return const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, Return const &impl, std::ostream &os, int indent)
 {
     dump(impl.expression, os, indent + 4);
 }
 
 template<>
-void dump(ASTNode const &, ExpressionList const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, ExpressionList const &impl, std::ostream &os, int indent)
 {
     print_indent(os, indent);
     os << "#expressions: " << impl.expressions.size() << "\n";
@@ -125,14 +125,14 @@ void dump(ASTNode const &, ExpressionList const &impl, std::wostream &os, int in
 }
 
 template<>
-void dump(ASTNode const &, ForStatement const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, ForStatement const &impl, std::ostream &os, int indent)
 {
     dump(impl.range_expr, os, indent + 4);
     dump(impl.statement, os, indent + 4);
 }
 
 template<>
-void dump(ASTNode const &, FunctionDeclaration const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, FunctionDeclaration const &impl, std::ostream &os, int indent)
 {
     for (auto const &gen : impl.generics) {
         dump(gen, os, indent + 4);
@@ -143,14 +143,14 @@ void dump(ASTNode const &, FunctionDeclaration const &impl, std::wostream &os, i
 }
 
 template<>
-void dump(ASTNode const &, FunctionDefinition const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, FunctionDefinition const &impl, std::ostream &os, int indent)
 {
     dump(impl.declaration, os, indent + 4);
     dump(impl.implementation, os, indent + 4);
 }
 
 template<>
-void dump(ASTNode const &, IfStatement const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, IfStatement const &impl, std::ostream &os, int indent)
 {
     dump(impl.condition, os, indent + 4);
     dump(impl.if_branch, os, indent + 4);
@@ -158,16 +158,18 @@ void dump(ASTNode const &, IfStatement const &impl, std::wostream &os, int inden
 }
 
 template<>
-void dump(ASTNode const &, LoopStatement const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, LoopStatement const &impl, std::ostream &os, int indent)
 {
     dump(impl.statement, os, indent + 4);
 }
 
 template<>
-void dump(ASTNode const &n, Program const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &n, Program const &impl, std::ostream &os, int indent)
 {
-    for (auto const &stmt : impl.statements) {
-        dump(stmt, os, indent + 4);
+    if (get_option("dump-std-lib")) {
+        for (auto const &stmt : impl.statements) {
+            dump(stmt, os, indent + 4);
+        }
     }
     auto &parser { *(n.repo) };
     for (auto &[_, mod] : parser.modules) {
@@ -176,13 +178,13 @@ void dump(ASTNode const &n, Program const &impl, std::wostream &os, int indent)
 }
 
 template<>
-void dump(ASTNode const &, PublicDeclaration const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, PublicDeclaration const &impl, std::ostream &os, int indent)
 {
     dump(impl.declaration, os, indent + 4);
 }
 
 template<>
-void dump(ASTNode const &, Struct const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, Struct const &impl, std::ostream &os, int indent)
 {
     for (auto const &m : impl.members) {
         dump(m, os, indent + 4);
@@ -190,14 +192,14 @@ void dump(ASTNode const &, Struct const &impl, std::wostream &os, int indent)
 }
 
 template<>
-void dump(ASTNode const &, SwitchCase const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, SwitchCase const &impl, std::ostream &os, int indent)
 {
     dump(impl.case_value, os, indent + 4);
     dump(impl.statement, os, indent + 4);
 }
 
 template<>
-void dump(ASTNode const &, SwitchStatement const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, SwitchStatement const &impl, std::ostream &os, int indent)
 {
     dump(impl.switch_value, os, indent + 4);
     for (auto const &c : impl.switch_cases) {
@@ -206,19 +208,19 @@ void dump(ASTNode const &, SwitchStatement const &impl, std::wostream &os, int i
 }
 
 template<>
-void dump(ASTNode const &, UnaryExpression const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, UnaryExpression const &impl, std::ostream &os, int indent)
 {
     dump(impl.operand, os, indent + 4);
 }
 
 template<>
-void dump(ASTNode const &, VariableDeclaration const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, VariableDeclaration const &impl, std::ostream &os, int indent)
 {
     dump(impl.initializer, os, indent + 4);
 }
 
 template<>
-void dump(ASTNode const &, WhileStatement const &impl, std::wostream &os, int indent)
+void dump(ASTNode const &, WhileStatement const &impl, std::ostream &os, int indent)
 {
     dump(impl.condition, os, indent + 4);
     dump(impl.statement, os, indent + 4);
@@ -227,49 +229,49 @@ void dump(ASTNode const &, WhileStatement const &impl, std::wostream &os, int in
 /* ======================================================================== */
 
 template<class N>
-std::wstring to_string(ASTNode const &, N const &)
+std::string to_string(ASTNode const &, N const &)
 {
-    return L"";
+    return "";
 }
 
 template<class Expr>
     requires std::is_same_v<Expr, BinaryExpression>
     || std::is_same_v<Expr, UnaryExpression>
-std::wstring to_string(ASTNode const &, Expr const &impl)
+std::string to_string(ASTNode const &, Expr const &impl)
 {
-    return as_wstring(Operator_name(impl.op));
+    return Operator_name(impl.op);
 }
 
 template<>
-std::wstring to_string(ASTNode const &, Alias const &impl)
+std::string to_string(ASTNode const &, Alias const &impl)
 {
-    return std::format(L"{} = {}", impl.name, to_string(impl.aliased_type));
+    return std::format("{} = {}", as_utf8(impl.name), to_string(impl.aliased_type));
 }
 
 template<>
-std::wstring to_string(ASTNode const &, BoolConstant const &impl)
+std::string to_string(ASTNode const &, BoolConstant const &impl)
 {
-    return (impl.value) ? L"True" : L"False";
+    return (impl.value) ? "True" : "False";
 }
 
 template<>
-std::wstring to_string(ASTNode const &, Call const &impl)
+std::string to_string(ASTNode const &, Call const &impl)
 {
     return to_string(impl.callable);
 }
 
 template<>
-std::wstring to_string(ASTNode const &, Decimal const &impl)
+std::string to_string(ASTNode const &, Decimal const &impl)
 {
-    std::wstringstream os;
+    std::stringstream os;
     os << impl.value;
-    return std::wstring { os.view() };
+    return std::string { os.view() };
 }
 
 template<>
-std::wstring to_string(ASTNode const &, Number const &impl)
+std::string to_string(ASTNode const &, Number const &impl)
 {
-    std::wstringstream os;
+    std::stringstream os;
     std::visit(
         [&os](auto v) {
             os << v;
@@ -282,22 +284,22 @@ std::wstring to_string(ASTNode const &, Number const &impl)
 template<class N>
     requires std::is_same_v<N, Embed>
     || std::is_same_v<N, Include>
-std::wstring to_string(ASTNode const &, N const &impl)
+std::string to_string(ASTNode const &, N const &impl)
 {
-    return impl.file_name;
+    return as_utf8(impl.file_name);
 }
 
 template<>
-std::wstring to_string(ASTNode const &, Import const &impl)
+std::string to_string(ASTNode const &, Import const &impl)
 {
-    return join(impl.file_name, L"."sv);
+    return as_utf8(join(impl.file_name, L"."sv));
 }
 
 template<>
-std::wstring to_string(ASTNode const &, Enum const &impl)
+std::string to_string(ASTNode const &, Enum const &impl)
 {
-    std::wstringstream os;
-    os << impl.name;
+    std::stringstream os;
+    os << as_utf8(impl.name);
     if (impl.underlying_type != nullptr) {
         os << ": " << to_string(impl.underlying_type);
     }
@@ -305,48 +307,48 @@ std::wstring to_string(ASTNode const &, Enum const &impl)
 }
 
 template<>
-std::wstring to_string(ASTNode const &, EnumValue const &impl)
+std::string to_string(ASTNode const &, EnumValue const &impl)
 {
-    std::wstring ret = impl.label;
+    std::string ret = as_utf8(impl.label);
     if (impl.value != nullptr) {
-        ret += L" = ";
+        ret += " = "sv;
         ret += to_string(impl.value);
     }
     if (impl.payload != nullptr) {
-        ret += L" (";
+        ret += " ("sv;
         ret += to_string(impl.payload);
-        ret += L")";
+        ret += ")"sv;
     }
     return ret;
 }
 
 template<>
-std::wstring to_string(ASTNode const &, Extern const &impl)
+std::string to_string(ASTNode const &, Extern const &impl)
 {
-    return std::format(L"{} function in library `{}`", impl.declarations.size(), impl.library);
+    return std::format("{} function in library `{}`", impl.declarations.size(), as_utf8(impl.library));
 }
 
 template<>
-std::wstring to_string(ASTNode const &, ExternLink const &impl)
+std::string to_string(ASTNode const &, ExternLink const &impl)
 {
-    return impl.link_name;
+    return as_utf8(impl.link_name);
 }
 
 template<>
-std::wstring to_string(ASTNode const &, ForStatement const &impl)
+std::string to_string(ASTNode const &, ForStatement const &impl)
 {
-    return impl.range_variable;
+    return as_utf8(impl.range_variable);
 }
 
 template<>
-std::wstring to_string(ASTNode const &, FunctionDeclaration const &impl)
+std::string to_string(ASTNode const &, FunctionDeclaration const &impl)
 {
-    std::wstringstream os;
-    os << impl.name;
+    std::stringstream os;
+    os << as_utf8(impl.name);
     if (!impl.generics.empty()) {
-        wchar_t sep { '<' };
+        char sep { '<' };
         for (auto const &gen : impl.generics) {
-            os << sep << get<Identifier>(gen).identifier;
+            os << sep << as_utf8(get<Identifier>(gen).identifier);
             sep = ',';
         }
         os << '>';
@@ -356,9 +358,9 @@ std::wstring to_string(ASTNode const &, FunctionDeclaration const &impl)
 }
 
 template<>
-std::wstring to_string(ASTNode const &, FunctionDefinition const &impl)
+std::string to_string(ASTNode const &, FunctionDefinition const &impl)
 {
-    return impl.name;
+    return as_utf8(impl.name);
 }
 
 template<class N>
@@ -368,79 +370,79 @@ template<class N>
     || std::is_same_v<N, SwitchStatement>
     || std::is_same_v<N, WhileStatement>
     || std::is_same_v<N, Yield>
-std::wstring to_string(ASTNode const &, N const &impl)
+std::string to_string(ASTNode const &, N const &impl)
 {
     if (impl.label) {
-        return *impl.label;
+        return as_utf8(*impl.label);
     }
-    return L"";
+    return "";
 }
 
 template<class N>
     requires std::is_same_v<N, Identifier> || std::is_same_v<N, StampedIdentifier>
-std::wstring to_string(ASTNode const &, N const &impl)
+std::string to_string(ASTNode const &, N const &impl)
 {
-    return impl.identifier;
+    return as_utf8(impl.identifier);
 }
 
 template<>
-std::wstring to_string(ASTNode const &, IdentifierList const &impl)
+std::string to_string(ASTNode const &, IdentifierList const &impl)
 {
-    return join(impl.identifiers, L"."sv);
+    return as_utf8(join(impl.identifiers, L"."sv));
 }
 
 template<>
-std::wstring to_string(ASTNode const &, Module const &impl)
+std::string to_string(ASTNode const &, Module const &impl)
 {
-    return impl.name;
+    return as_utf8(impl.name);
 }
 
 template<>
-std::wstring to_string(ASTNode const &, Parameter const &impl)
+std::string to_string(ASTNode const &, Parameter const &impl)
 {
-    return std::format(L"{}: {}", impl.name, to_string(impl.type_name));
+    return std::format("{}: {}", as_utf8(impl.name), to_string(impl.type_name));
 }
 
 template<>
-std::wstring to_string(ASTNode const &, QuotedString const &impl)
+std::string to_string(ASTNode const &, QuotedString const &impl)
+{
+    return as_utf8(impl.string);
+}
+
+template<>
+std::string to_string(ASTNode const &, CString const &impl)
 {
     return impl.string;
 }
 
 template<>
-std::wstring to_string(ASTNode const &, CString const &impl)
+std::string to_string(ASTNode const &, String const &impl)
 {
-    return as_wstring(impl.string);
+    return as_utf8(impl.string);
 }
 
 template<>
-std::wstring to_string(ASTNode const &, String const &impl)
+std::string to_string(ASTNode const &, Struct const &impl)
 {
-    return impl.string;
+    return as_utf8(impl.name);
 }
 
 template<>
-std::wstring to_string(ASTNode const &, Struct const &impl)
+std::string to_string(ASTNode const &, StructMember const &impl)
 {
-    return impl.name;
-}
-
-template<>
-std::wstring to_string(ASTNode const &, StructMember const &impl)
-{
-    return std::format(L"{} {}", impl.label, to_string(impl.member_type));
+    return std::format("{} {}", as_utf8(impl.label), to_string(impl.member_type));
 }
 
 template<TagReference TagRef>
-std::wstring to_string(ASTNode const &n, TagRef const &impl)
+std::string to_string(ASTNode const &n, TagRef const &impl)
 {
-    std::wstringstream ss {};
+    std::stringstream ss {};
     ss << impl.tag_value;
     if (n->bound_type) {
         std::visit(
             overloads {
                 [&ss, &impl](enumerated_type auto const &enoom) -> void {
-                    ss << L"=" << enoom.label_for(impl.tag_value).value_or(L"??");
+                    ss << "=" << as_utf8(enoom.label_for(impl.tag_value).value_or(L"??"));
                 },
                 [](auto const &) -> void {
                     std::unreachable();
@@ -451,15 +453,15 @@ std::wstring to_string(ASTNode const &n, TagRef const &impl)
 }
 
 template<>
-std::wstring to_string(ASTNode const &n, TagPayload const &impl)
+std::string to_string(ASTNode const &n, TagPayload const &impl)
 {
-    std::wstringstream ss {};
+    std::stringstream ss {};
     ss << impl.tag_value;
     if (n->bound_type) {
         std::visit(
             overloads {
                 [&ss, &impl](enumerated_type auto const &enoom) -> void {
-                    ss << L"=" << enoom.label_for(impl.tag_value).value_or(L"??");
+                    ss << "=" << as_utf8(enoom.label_for(impl.tag_value).value_or(L"??"));
                 },
                 [](auto const &) -> void {
                     std::unreachable();
@@ -470,49 +472,49 @@ std::wstring to_string(ASTNode const &n, TagPayload const &impl)
 }
 
 template<>
-std::wstring to_string(ASTNode const &, TypeSpecification const &impl)
+std::string to_string(ASTNode const &, TypeSpecification const &impl)
 {
     return std::visit(
         overloads {
-            [](TypeNameNode const &d) -> std::wstring {
-                return std::format(L"<{}>", join(d.name, std::wstring_view { L"," }));
+            [](TypeNameNode const &d) -> std::string {
+                return std::format("<{}>", as_utf8(join(d.name, std::wstring_view { L"," })));
             },
-            [](ReferenceDescriptionNode const &d) -> std::wstring {
-                return std::format(L"&{}", to_string(d.referencing));
+            [](ReferenceDescriptionNode const &d) -> std::string {
+                return std::format("&{}", to_string(d.referencing));
             },
-            [](SliceDescriptionNode const &d) -> std::wstring {
-                return std::format(L"[]{}", to_string(d.slice_of));
+            [](SliceDescriptionNode const &d) -> std::string {
+                return std::format("[]{}", to_string(d.slice_of));
             },
-            [](ZeroTerminatedArrayDescriptionNode const &d) -> std::wstring {
-                return std::format(L"[0]{}", to_string(d.array_of));
+            [](ZeroTerminatedArrayDescriptionNode const &d) -> std::string {
+                return std::format("[0]{}", to_string(d.array_of));
             },
-            [](ArrayDescriptionNode const &d) -> std::wstring {
-                return std::format(L"[{}]{}", d.size, to_string(d.array_of));
+            [](ArrayDescriptionNode const &d) -> std::string {
+                return std::format("[{}]{}", d.size, to_string(d.array_of));
             },
-            [](DynArrayDescriptionNode const &d) -> std::wstring {
-                return std::format(L"[*]{}", to_string(d.array_of));
+            [](DynArrayDescriptionNode const &d) -> std::string {
+                return std::format("[*]{}", to_string(d.array_of));
             },
-            [](OptionalDescriptionNode const &d) -> std::wstring {
-                return std::format(L"{}?", to_string(d.optional_of));
+            [](OptionalDescriptionNode const &d) -> std::string {
+                return std::format("{}?", to_string(d.optional_of));
             },
-            [](PointerDescriptionNode const &d) -> std::wstring {
-                return std::format(L"{}*", to_string(d.referencing));
+            [](PointerDescriptionNode const &d) -> std::string {
+                return std::format("{}*", to_string(d.referencing));
             },
-            [](ResultDescriptionNode const &d) -> std::wstring {
-                return std::format(L"{}/{}", to_string(d.success), to_string(d.error));
+            [](ResultDescriptionNode const &d) -> std::string {
+                return std::format("{}/{}", to_string(d.success), to_string(d.error));
             },
         },
         impl.description);
 }
 
 template<>
-std::wstring to_string(ASTNode const &, VariableDeclaration const &impl)
+std::string to_string(ASTNode const &, VariableDeclaration const &impl)
 {
-    std::wstringstream os;
+    std::stringstream os;
     if (impl.is_const) {
         os << "const ";
     }
-    os << impl.name;
+    os << as_utf8(impl.name);
     if (impl.type_name != nullptr) {
         os << ": " << to_string(impl.type_name);
     }
@@ -521,49 +523,63 @@ std::wstring to_string(ASTNode const &, VariableDeclaration const &impl)
 
 /* ======================================================================== */
 
-std::wstring to_string(ASTNode const &node)
+std::string to_string(ASTNode const &node)
 {
     if (node == nullptr) {
-        return L"[null]";
+        return "[null]";
     }
-    std::wstringstream os;
-    os << SyntaxNodeType_name(node->type()) << ' ';
+    std::stringstream os;
+    std::string       color {};
+    switch (node->status) {
+    case ASTStatus::Initialized:
+    case ASTStatus::Normalized:
+        break;
+    case ASTStatus::Bound:
+        color = "\x1b[32m";
+        break;
+    case ASTStatus::Undetermined:
+        color = "\x1b[33m";
+        break;
+    case ASTStatus::Ambiguous:
+    case ASTStatus::BindErrors:
+    case ASTStatus::InternalError:
+        color = "\x1b[31m";
+        break;
+    }
+    os << color << SyntaxNodeType_name(node->type());
+    if (!color.empty()) {
+        os << "\x1b[m";
+    }
+    os << ' ';
     std::visit(
         [&node, &os](auto const &impl) {
             os << to_string(node, impl);
         },
         node->node);
     if (node->bound_type != nullptr) {
-        os << " -> " << node->bound_type->name;
+        os << " -> " << as_utf8(node->bound_type->name);
     }
     os << " ";
     switch (node->status) {
     case ASTStatus::Initialized:
-        os << L"Initialized";
-        break;
     case ASTStatus::Normalized:
-        os << L"Normalized";
-        break;
     case ASTStatus::Bound:
-        os << L"Bound";
-        break;
     case ASTStatus::Undetermined:
-        os << L"Undetermined";
         break;
     case ASTStatus::Ambiguous:
-        os << L"Ambiguous";
+        os << "Ambiguous";
         break;
     case ASTStatus::BindErrors:
-        os << L"BindErrors";
+        os << "BindErrors";
         break;
     case ASTStatus::InternalError:
-        os << L"InternalError";
+        os << "InternalError";
         break;
     }
     return os.str();
 }
 
-void header(ASTNode const &node, std::wostream &os)
+void header(ASTNode const &node, std::ostream &os)
 {
     os << node.id.value()
        << " "
@@ -573,7 +589,7 @@ void header(ASTNode const &node, std::wostream &os)
        << to_string(node);
 }
 
-void dump(ASTNode const &node, std::wostream &os, int indent)
+void dump(ASTNode const &node, std::ostream &os, int indent)
 {
     if (node == nullptr) {
         return;
@@ -596,7 +612,7 @@ void dump(ASTNode const &node, std::wostream &os, int indent)
         node->node);
 }
 
-void dump(ASTNodes const &nodes, std::wostream &os, int indent)
+void dump(ASTNodes const &nodes, std::ostream &os, int indent)
 {
     for (auto const &node : nodes) {
         dump(node, os, indent);

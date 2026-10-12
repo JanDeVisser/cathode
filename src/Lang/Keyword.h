@@ -78,7 +78,7 @@ enum class LangKeyword {
 
 struct LangError {
     TokenLocation location;
-    std::wstring  message;
+    std::string   message;
 };
 
 extern char const *LangKeyword_name(LangKeyword kw);

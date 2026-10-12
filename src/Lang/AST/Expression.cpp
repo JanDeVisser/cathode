@@ -56,7 +56,7 @@ ASTNode BinaryExpression::normalized(ASTNode const &n) const
             if (is<BinaryExpression>(n)) {
                 auto const &binexp { get<BinaryExpression>(n) };
                 if (binexp.op != Operator::MemberAccess) {
-                    return std::unexpected(LangError { n->location, L"Expected dotted identifier list" });
+                    return std::unexpected(LangError { n->location, "Expected dotted identifier list" });
                 }
                 if (auto res = flatten(binexp.lhs); !res) {
                     return std::unexpected(res.error());
@@ -67,7 +67,7 @@ ASTNode BinaryExpression::normalized(ASTNode const &n) const
             } else if (is<Identifier>(n)) {
                 identifiers.emplace_back(get<Identifier>(n).identifier);
             } else {
-                return std::unexpected(LangError { n->location, L"Expected dotted identifier list" });
+                return std::unexpected(LangError { n->location, "Expected dotted identifier list" });
             }
             return n;
         };
@@ -142,7 +142,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
             auto type_type = get<TypeType>(lhs_type).type;
             if (!is<Identifier>(rhs)) {
                 return parser.bind_error(rhs->location,
-                    L"The right-hand side of a member access must be an identifier");
+                    "The right-hand side of a member access must be an identifier");
             }
             auto const &label = get<Identifier>(rhs).identifier;
             if (auto res = std::visit(
@@ -157,7 +157,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                             return std::unexpected(
                                 LangError {
                                     rhs->location,
-                                    std::format(L"Unknown tagged union value `{}`", label),
+                                    as_utf8(std::format(L"Unknown tagged union value `{}`", label)),
                                 });
                         },
                         [&label, this, &n, &type_type](EnumType const &t) -> std::expected<ASTNode, LangError> {
@@ -170,14 +170,14 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                             return std::unexpected(
                                 LangError {
                                     rhs->location,
-                                    std::format(L"Unknown enum value `{}`", label),
+                                    as_utf8(std::format(L"Unknown enum value `{}`", label)),
                                 });
                         },
                         [this](auto const &) -> std::expected<ASTNode, LangError> {
                             return std::unexpected(
                                 LangError {
                                     lhs->location,
-                                    L"A type in the left-hand side of a member access must be an `enum` type",
+                                    "A type in the left-hand side of a member access must be an `enum` type",
                                 });
                         } },
                     type_type->description);
@@ -190,7 +190,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
         if ((lhs_type->kind() != TypeKind::ModuleType) && (lhs_type->kind() != TypeKind::ReferenceType && !is<Identifier>(lhs))) {
             return parser.bind_error(
                 lhs->location,
-                L"Left hand side of member access operator must be value reference or module");
+                "Left hand side of member access operator must be value reference or module");
         }
         auto lhs_value_type = lhs_type->value_type();
         return std::visit(
@@ -230,7 +230,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                 [&parser, this, &lhs_value_type, &n](TaggedUnionType const &tagged_union) -> BindResult {
                     if (!is<Identifier>(rhs)) {
                         return parser.bind_error(rhs->location,
-                            L"The right-hand side of a member access must be an identifier");
+                            "The right-hand side of a member access must be an identifier");
                     }
                     auto const &label = get<Identifier>(rhs).identifier;
                     if (auto v = tagged_union.value_for(label); v) {
@@ -239,12 +239,12 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                     }
                     return parser.bind_error(
                         rhs->location,
-                        L"Unknown tagged union value `{}`", label);
+                        "Unknown tagged union value `{}`", as_utf8(label));
                 },
                 [&parser, &lhs_value_type, this](auto const &) -> BindResult {
                     return parser.bind_error(
                         rhs->location,
-                        L"Left hand side of member access operator has type `{}` which is not a struct", lhs_value_type->name);
+                        "Left hand side of member access operator has type `{}` which is not a struct", as_utf8(lhs_value_type->name));
                 } },
             lhs_value_type->description);
     }
@@ -257,7 +257,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
         if (is<BinaryExpression>(lhs) && get<BinaryExpression>(lhs).op == Operator::MemberAccess) {
             auto const &member_access { get<BinaryExpression>(lhs) };
             if (!is<TaggedUnionType>(lhs_value_type) || !is<Tag>(member_access.rhs)) {
-                return parser.bind_error(lhs->location, L"Only tagged union values can be assigned a payload");
+                return parser.bind_error(lhs->location, "Only tagged union values can be assigned a payload");
             }
             auto const        &tagged_union { get<TaggedUnionType>(lhs_value_type) };
             auto const        &tag_value { get<Tag>(member_access.rhs) };
@@ -303,7 +303,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
         if (rhs_value_type->kind() != TypeKind::TypeType) {
             return parser.bind_error(
                 rhs->location,
-                L"`Cast` operator requires a type as right hand side");
+                "`Cast` operator requires a type as right hand side");
         }
         auto target_type = get<TypeType>(rhs_value_type).type;
         return std::visit(
@@ -312,7 +312,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                     if (lhs_int_type.width_bits > rhs_int_type.width_bits) {
                         return parser.bind_error(
                             n->location,
-                            L"Invalid argument type. Cannot narrow integers");
+                            "Invalid argument type. Cannot narrow integers");
                     }
                     return { target_type };
                 },
@@ -323,7 +323,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                     if (lhs_int_type.width_bits > rhs_int_type.width_bits) {
                         return parser.bind_error(
                             n->location,
-                            L"Invalid argument type. Cannot narrow integers");
+                            "Invalid argument type. Cannot narrow integers");
                     }
                     return { target_type };
                 },
@@ -334,7 +334,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                     if (lhs_int_type.width_bits > rhs_int_type.width_bits) {
                         return parser.bind_error(
                             n->location,
-                            L"Invalid argument type. Cannot narrow integers");
+                            "Invalid argument type. Cannot narrow integers");
                     }
                     return { target_type };
                 },
@@ -342,14 +342,14 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                     if (lhs_slice_type.slice_of != TypeRegistry::u32 || rhs_zero_terminated_type.array_of != TypeRegistry::u8) {
                         return parser.bind_error(
                             n->location,
-                            L"Invalid argument type. Cannot cast slices to zero-terminated arrays except for strings");
+                            "Invalid argument type. Cannot cast slices to zero-terminated arrays except for strings");
                     }
                     return { target_type };
                 },
                 [&parser, &n](auto const &, auto const &) -> BindResult {
                     return parser.bind_error(
                         n->location,
-                        L"Invalid argument type. Can only cast integers");
+                        "Invalid argument type. Can only cast integers");
                 } },
             lhs_value_type->description, target_type->description);
     }
@@ -427,10 +427,10 @@ BindResult UnaryExpression::bind(ASTNode const &n) const
     }
     if (op == Operator::AddressOf) {
         if (is<ReferenceType>(operand_type)) {
-            return parser.bind_error(n->location, L"Cannot take address of reference");
+            return parser.bind_error(n->location, "Cannot take address of reference");
         }
         if (is_constant(n)) {
-            return parser.bind_error(n->location, L"Cannot take address of constant");
+            return parser.bind_error(n->location, "Cannot take address of constant");
         }
         return TypeRegistry::the().referencing(operand_type);
     }

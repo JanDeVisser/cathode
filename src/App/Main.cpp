@@ -202,13 +202,13 @@ struct Builder {
             if (!parser.errors.empty()) {
                 log_error("Syntax error(s) found:");
                 for (auto const &err : parser.errors) {
-                    log_error(L"{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);
+                    log_error("{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);
                 }
                 return false;
             }
             info("Syntactic parsing succeeded", parser.pass);
             if (has_option("dump-trees")) {
-                dump(parser.program, std::wcerr);
+                dump(parser.program, std::cerr);
             }
             return true;
         }
@@ -220,7 +220,7 @@ struct Builder {
         if (!parser.errors.empty()) {
             log_error("Error(s) found during first phase of sematic analysis:");
             for (auto const &err : parser.errors) {
-                log_error(L"{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);
+                log_error("{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);
             }
             return false;
         }
@@ -228,7 +228,7 @@ struct Builder {
         parser.program = normalized;
         info("First phase of sematic analysis succeeded");
         if (has_option("dump-trees")) {
-            dump(parser.program, std::wcerr);
+            dump(parser.program, std::cerr);
         }
         return true;
     }
@@ -240,11 +240,11 @@ struct Builder {
             info("Second phase of semantic analysis failed after {} pass(es)", parser.pass);
             if (!parser.errors.empty()) {
                 if (has_option("dump-trees")) {
-                    dump(parser.program, std::wcerr);
+                    dump(parser.program, std::cerr);
                 }
                 log_error("Error(s) found during second phase of semantic analysis:");
                 for (auto const &err : parser.errors) {
-                    log_error(L"{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);
+                    log_error("{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);
                 }
             } else if (parser.program->status != ASTStatus::Undetermined) {
                 log_error("Internal error(s) encountered during semantic analysis");
@@ -259,7 +259,7 @@ struct Builder {
         }
         info("Second phase of semantic analysis succeeded after {} pass(es)", parser.pass);
         if (has_option("dump-trees")) {
-            dump(parser.program, std::wcerr);
+            dump(parser.program, std::cerr);
         }
         return true;
     }
@@ -314,9 +314,17 @@ std::optional<Builder> make_builder(T source)
     return Builder { source };
 }
 
+void version()
+{
+    std::print(std::cout, "cathode {} {} {} {} {} {}\n",
+        CATHODE_VERSION, CATHODE_GIT_HASH, CATHODE_SYSTEM, CATHODE_SYSTEM_VERSION, CATHODE_CPU, CATHODE_COMPILER);
+}
+
 void usage()
 {
-    std::cout << "cathode - cathode language compiler  https://www.cathode-lang.org\n\n";
+    version();
+    std::cout << "\n";
+    std::cout << "cathode language compiler - https://www.cathode-lang.org\n\n";
     std::cout << "Usage:\n";
     std::cout << "   cathode help | usage | --help, -h - This text\n";
     std::cout << "   cathode [OPTIONS] build [-- <arg>...]\n";
@@ -327,7 +335,7 @@ void usage()
     std::cout << "Options:\n";
     std::cout << "  --keep-assembly       Do not delete assembly files after compiling\n";
     std::cout << "  --keep-objects        Do not delete object files after linking\n";
-    std::cout << "  --list                Write intermediate representation to .cth/<program>.ir\n";
+    std::cout << "  --list                Write intermediate representation to .cathode/<program>.ir\n";
     std::cout << "  --run                 Run the executable build with `build` or `compile`\n";
     std::cout << "                        Pass the command line arguments specified after `--`\n";
     std::cout << "  --stop-after-analysis Stop after semantic analysis\n";
@@ -337,13 +345,6 @@ void usage()
     std::cout << "  -Lpath, -llibrary     Passed on to the linker execution\n";
     std::cout << "\n";
     exit(1);
-}
-
-void version()
-{
-    std::print(std::cout, "cathode {} {} {}\n",
-        CATHODE_VERSION, CATHODE_SYSTEM, CATHODE_SYSTEM_VERSION, CATHODE_CPU, CATHODE_COMPILER);
-    exit(0);
 }
 
 int main(int argc, char const **argv)
@@ -375,14 +376,18 @@ int main(int argc, char const **argv)
     if (arg_ix == argc) {
         if (has_option("version")) {
             version();
+            exit(0);
         }
         usage();
     }
-    if (has_option("version") || strcmp(argv[arg_ix], "usage") == 0 || strcmp(argv[arg_ix], "help") == 0) {
+    if (strcmp(argv[arg_ix], "usage") == 0 || strcmp(argv[arg_ix], "help") == 0) {
         usage();
-    } else if (strcmp(argv[arg_ix], "version") == 0) {
+    } else if (has_option("version") || strcmp(argv[arg_ix], "version") == 0) {
         version();
-    } else if (strcmp(argv[arg_ix], "build") == 0) {
+        exit(0);
+    }
+
+    if (strcmp(argv[arg_ix], "build") == 0) {
         if (auto builder_maybe = make_builder(fs::current_path()); builder_maybe) {
             if (!builder_maybe->build()) {
                 return 1;

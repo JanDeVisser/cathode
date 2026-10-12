@@ -36,7 +36,7 @@ ASTNode Comptime::normalized(ASTNode const &n) const
     if (!parser.errors.empty()) {
         log_error("Syntax error(s) found in @comptime block:");
         for (auto const &err : parser.errors) {
-            log_error(L"{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);
+            log_error("{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);
         }
         return n;
     }
@@ -76,9 +76,9 @@ BindResult Comptime::bind(ASTNode const &n) const
             case ASTStatus::Ambiguous: {
                 log_error("Error(s) found during compilation of @comptime block:");
                 for (auto const &err : parser.errors) {
-                    log_error(L"{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);
+                    log_error("{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);
                 }
-                return parser.bind_error(n->location, L"Bind error in @comptime block");
+                return parser.bind_error(n->location, "Bind error in @comptime block");
             }
             case ASTStatus::Undetermined:
                 return BindError { ASTStatus::Undetermined };
@@ -125,21 +125,21 @@ BindResult Comptime::bind(ASTNode const &n) const
     if (auto parsed_output = parse<Block>(*(n.repo), output); parsed_output) {
         trace(PreProc, "@comptime after parsing");
         if (trace_on()) {
-            dump(parsed_output, std::wcerr);
+            dump(parsed_output, std::cerr);
         }
         auto new_node { make_node<Comptime>(n, std::wstring { script_text }, normalize(parsed_output), std::wstring { output }) };
         trace(PreProc, "@comptime after normalizing");
         auto new_comptime { get<Comptime>(new_node) };
         if (trace_on()) {
-            dump(new_comptime.statements, std::wcerr);
+            dump(new_comptime.statements, std::cerr);
         }
         return Lang::bind(new_comptime.statements);
     } else {
         log_error("@comptime parse failed");
         for (auto const &err : parser.errors) {
-            log_error(L"{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);
+            log_error("{}:{} {}", err.location.line + 1, err.location.column + 1, err.message);
         }
-        return n.bind_error(L"Error(s) parsing result of @comptime block");
+        return n.bind_error("Error(s) parsing result of @comptime block");
     }
     return nullptr;
 }

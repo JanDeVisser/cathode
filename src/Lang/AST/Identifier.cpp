@@ -31,7 +31,7 @@ BindResult Identifier::bind(ASTNode const &n) const
         if (parser.pass == 0) {
             return BindError { ASTStatus::Undetermined };
         } else {
-            return n.bind_error(L"Unresolved identifier `{}`", identifier);
+            return n.bind_error("Unresolved identifier `{}`", as_utf8(identifier));
         }
     }
     if (is<ModuleType>(type)) {
@@ -83,11 +83,11 @@ BindResult VariableDeclaration::bind(ASTNode const &n) const
     }
     if (init_type != nullptr && !init_type->compatible(my_type) && !init_type->assignable_to(my_type)) {
         return n.bind_error(
-            L"Type mismatch between declared type `{}` of `{}` and type of initializer value `{}`",
-            my_type->name, name, init_type->name);
+            "Type mismatch between declared type `{}` of `{}` and type of initializer value `{}`",
+            as_utf8(my_type->name), as_utf8(name), as_utf8(init_type->name));
     }
     if (n.repo->has_variable({ name })) {
-        return n.bind_error(L"Duplicate variable name `{}`", name);
+        return n.bind_error("Duplicate variable name `{}`", as_utf8(name));
     }
     parser.register_variable(name, n);
     return my_type;

@@ -162,8 +162,8 @@ BindResult IfStatement::bind(ASTNode const &n) const
     try_bind(condition);
     if (!condition->bound_type->assignable_to(TypeRegistry::boolean)) {
         return n.bind_error(
-            L"`if` loop condition is a `{}`, not a boolean",
-            condition->bound_type->name);
+            "`if` loop condition is a `{}`, not a boolean",
+            as_utf8(condition->bound_type->name));
     }
     try_bind(if_branch);
     if (else_branch != nullptr) {
@@ -225,7 +225,7 @@ BindResult Return::bind(ASTNode const &n) const
     }
     if (expression != nullptr && return_type == TypeRegistry::void_) {
         return n.bind_error(
-            L"`return` returns from a function returning `void` and therefore cannot return a value");
+            "`return` returns from a function returning `void` and therefore cannot return a value");
     }
     return return_type;
 }
@@ -254,7 +254,7 @@ BindResult WhileStatement::bind(ASTNode const &n) const
     try_bind(condition);
     pType t = condition->bound_type;
     if (!is<BoolType>(t)) {
-        return n.bind_error(L"`while` loop condition is a `{}`, not a boolean", t->name);
+        return n.bind_error("`while` loop condition is a `{}`, not a boolean", as_utf8(t->name));
     }
     return try_bind(statement);
 }

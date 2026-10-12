@@ -195,7 +195,7 @@ struct Parser {
     void append(LexerErrorMessage const &lexer_error, wchar_t const *message);
     void append(Token const &token, char const *message);
     void append(Token const &token, wchar_t const *message);
-    void append(TokenLocation location, std::wstring message);
+    void append(TokenLocation location, std::wstring const &message);
     void append(TokenLocation location, std::string const &message);
     void append(TokenLocation location, wchar_t const *message);
     void append(TokenLocation location, char const *message);

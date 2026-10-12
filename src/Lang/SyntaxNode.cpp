@@ -66,7 +66,7 @@ void ASTNode::error(std::string const &msg) const
     repo->append((*this)->location, msg);
 }
 
-BindError ASTNode::bind_error(std::wstring const &msg) const
+BindError ASTNode::bind_error(std::string const &msg) const
 {
     return repo->bind_error((*this)->location, msg);
 }
@@ -214,7 +214,7 @@ BindResult bind(ASTNode node)
         } else {
             switch (retval.error()) {
             case ASTStatus::InternalError:
-                dump(node, std::wcerr);
+                dump(node, std::cerr);
                 assert("bind(): Internal error" == nullptr);
                 break;
             case ASTStatus::Undetermined:

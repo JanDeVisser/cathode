@@ -50,11 +50,31 @@ endif ()
 
 set(CMAKE_INSTALL_PREFIX ${PROJECT_BINARY_DIR} CACHE PATH "..." FORCE)
 
+find_package(Git REQUIRED)
+if(GIT_FOUND)
+  execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --always --dirty
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE cathode_GIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+  execute_process(
+            COMMAND ${GIT_EXECUTABLE} rev-list --count HEAD
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            OUTPUT_VARIABLE cathode_VERSION_PATCH
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET)
+endif()
+set_property(DIRECTORY APPEND PROPERTY
+  CMAKE_CONFIGURE_DEPENDS
+  "${CMAKE_SOURCE_DIR}/.git/HEAD"
+  "${CMAKE_SOURCE_DIR}/.git/index")
+
 set(cathode_NAME cathode)
 set(cathode_VERSION_MAJOR 0)
 set(cathode_VERSION_MINOR 0)
-set(cathode_VERSION_PATCH 222)
-set(cathode_VERSION "${cathode_VERSION_MAJOR}.${cathode_VERSION_MINOR}.${cathode_VERSION_PATCH}")
+set(cathode_VERSION
+  "${cathode_VERSION_MAJOR}.${cathode_VERSION_MINOR}.${cathode_VERSION_PATCH}")
 set(cathode_APPDIR ${CMAKE_INSTALL_PREFIX})
 set(cathode_DATADIR ${CMAKE_INSTALL_PREFIX}/share)
 

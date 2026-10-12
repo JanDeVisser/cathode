@@ -370,7 +370,6 @@ int main(int argc, char const **argv)
         info("Verbose mode is ON");
         break;
     default:
-        std::cout << "Log level: " << logger.level << "\n";
         break;
     }
     if (arg_ix == argc) {

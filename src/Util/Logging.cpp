@@ -131,7 +131,6 @@ Logger::Logger()
 
     auto const categories = get_option_values("trace");
     for (auto cat : categories) {
-        std::cout << "Cat: " << cat << "\n";
         if (cat == "true") {
             cat = "all";
         }

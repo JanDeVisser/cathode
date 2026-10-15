@@ -22,38 +22,6 @@ Namespace::Namespace(ASTNode node, NSNode parent)
 {
 }
 
-bool Namespace::contains(std::wstring const &name) const
-{
-    if (node && is<ModuleProxy>(node)) {
-        auto proxy { get<ModuleProxy>(node) };
-        if (proxy.module && proxy.module->ns->contains(name)) {
-            return true;
-        }
-    }
-    if (entries.contains(name)) {
-        return true;
-    }
-    if (parent != nullptr) {
-        return parent->contains(name);
-    }
-    return false;
-}
-
-int Namespace::count(std::wstring const &name) const
-{
-    auto ret = entries.count(name);
-    if (node && is<ModuleProxy>(node)) {
-        auto proxy { get<ModuleProxy>(node) };
-        if (proxy.module) {
-            ret += proxy.module->ns->count(name);
-        }
-    }
-    if (parent != nullptr) {
-        ret += parent->count(name);
-    }
-    return ret;
-}
-
 std::optional<Namespace::NSEntry> Namespace::at(std::wstring const &name) const
 {
     auto a { all(name) };
@@ -84,20 +52,21 @@ Namespace::NSEntries Namespace::all(std::wstring const &name) const
 
 ASTNode Namespace::find_module(std::wstring const &name) const
 {
-    if (auto e { at(name) }; e && e->index() == Namespace::Module) {
-        return std::get<Namespace::Module>(*e);
+    for (auto const &entry : all(name)) {
+        if (entry.module != nullptr) {
+            return entry.module;
+        }
     }
     return nullptr;
 }
 
 void Namespace::register_module(std::wstring const &name, ASTNode module)
 {
-    assert(!contains(name));
+    assert(!entries.contains(name) || entries.at(name).module == nullptr);
     module->bound_type = TypeRegistry::module;
-#ifdef DEBUG_NAMESPACE_STACK
-    info(L"[S->m {}] {}", id.id.value(), name);
-#endif
-    entries.emplace(name, Namespace::NSEntry { std::in_place_index<Namespace::Module>, module });
+    trace(NS, L"[S->m {}] {}", id.id.value(), name);
+    auto &entry = entries[name];
+    entry.module = module;
 }
 
 bool Namespace::has_module(std::wstring const &name) const
@@ -107,16 +76,10 @@ bool Namespace::has_module(std::wstring const &name) const
 
 pType Namespace::find_type(std::wstring const &name) const
 {
-    if (auto entry { at(name) }; entry) {
-        return std::visit(
-            overloads {
-                [](pType const &type) -> pType {
-                    return type;
-                },
-                [](auto const &) -> pType {
-                    return nullptr;
-                } },
-            *entry);
+    for (auto const &entry : all(name)) {
+        if (entry.type != nullptr) {
+            return entry.type;
+        }
     }
     return nullptr;
 }
@@ -135,11 +98,10 @@ ASTNode Namespace::current_function() const
 
 void Namespace::register_type(std::wstring name, pType type)
 {
-    assert(!contains(name));
-#ifdef DEBUG_NAMESPACE_STACK
-    info(L"[S->t {}] {}", id.id.value(), name);
-#endif
-    entries.emplace(name, type);
+    assert(!entries.contains(name) || entries.at(name).type == nullptr);
+    trace(NS, L"[S->t {}] {}", id.id.value(), name);
+    auto &entry = entries[name];
+    entry.type = type;
 }
 
 bool Namespace::has_type(std::wstring const &name) const
@@ -149,8 +111,10 @@ bool Namespace::has_type(std::wstring const &name) const
 
 ASTNode Namespace::find_variable(std::wstring const &name) const
 {
-    if (auto entry { at(name) }; entry && entry->index() == Namespace::Variable) {
-        return std::get<Namespace::Variable>(*entry);
+    for (auto const &entry : all(name)) {
+        if (entry.variable != nullptr) {
+            return entry.variable;
+        }
     }
     return nullptr;
 }
@@ -160,56 +124,37 @@ bool Namespace::has_variable(std::wstring const &name) const
     return find_variable(name) != nullptr;
 }
 
-pType Namespace::type_of(std::wstring const &name) const
+bool Namespace::has_variable_here(std::wstring const &name) const
 {
-    if (auto entry { at(name) }; entry) {
-        switch (entry->index()) {
-        case Namespace::Variable:
-            return std::get<Namespace::Variable>(*entry)->bound_type;
-        case Namespace::Function:
-            return nullptr;
-        case Namespace::Module:
-            return TypeRegistry::module;
-        case Namespace::Type:
-            return TypeRegistry::the().type_of(std::get<pType>(*entry));
-        default:
-            UNREACHABLE();
-        }
-    }
-    return nullptr;
+    return entries.contains(name) && (entries.at(name).variable != nullptr);
 }
 
 void Namespace::register_variable(std::wstring name, ASTNode variable)
 {
-    if (contains(name)) {
-        fatal(L"Trying to re-register variable `{}`", name);
-    }
-#ifdef DEBUG_NAMESPACE_STACK
-    info(L"[S->v {}] {}", id.id.value(), name);
-#endif
-    entries.emplace(name, Namespace::NSEntry { std::in_place_index<Namespace::Variable>, variable });
+    assert(!entries.contains(name) || entries.at(name).variable == nullptr);
+    trace(NS, L"[S->v {}] {}", id.id.value(), name);
+    auto &entry = entries[name];
+    entry.variable = variable;
 }
 
 bool Namespace::has_function(std::wstring const &name) const
 {
-    return std::ranges::any_of(all(name),
-        [](auto const &e) -> bool {
-            return e.index() == 1;
-        });
+    for (auto const &entry : all(name)) {
+        if (!entry.functions.empty()) {
+            return true;
+        }
+    }
+    return false;
 }
 
 ASTNodes Namespace::find_functions(std::wstring const &name) const
 {
     ASTNodes ret { };
     std::ranges::for_each(
-        all(name) | enumerate,
-        [&ret](auto const &t) {
-            auto const &[ix, e] = t;
-            if (e.index() == Namespace::Function) {
-                assert(ret.size() == ix);
-                ret.emplace_back(std::get<Namespace::Function>(e));
-            } else {
-                assert(ix == 0);
+        all(name),
+        [&ret](auto const &e) {
+            for (auto const &func : e.functions) {
+                ret.emplace_back(func);
             }
         });
     return ret;
@@ -252,10 +197,28 @@ ASTNodes Namespace::find_overloads(std::wstring const &name, ASTNodes const &typ
 
 void Namespace::register_function(std::wstring name, ASTNode fnc)
 {
-    assert(!contains(name) || has_function(name));
-#ifdef DEBUG_NAMESPACE_STACK
-    info(L"[S->f {}] {}", id.id.value(), name);
-#endif
-    entries.emplace(name, Namespace::NSEntry { std::in_place_index<Namespace::Function>, fnc });
+    if (entries.contains(name)) {
+        for (auto const &f : entries.at(name).functions) {
+            FunctionDefinition const &def = get<FunctionDefinition>(f);
+            assert(def.declaration->bound_type != fnc->bound_type);
+        }
+    }
+    trace(NS, L"[S->f {}] {}", id.id.value(), name);
+    auto &entry = entries[name];
+    entry.functions.emplace_back(fnc);
+}
+
+pType Namespace::type_of(std::wstring const &name) const
+{
+    for (auto const &entry : all(name)) {
+        if (entry.variable != nullptr) {
+            return entry.variable->bound_type;
+        } else if (entry.module != nullptr) {
+            return TypeRegistry::module;
+        } else if (entry.type != nullptr) {
+            return entry.type;
+        }
+    }
+    return nullptr;
 }
 }

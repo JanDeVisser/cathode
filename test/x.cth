@@ -1,20 +1,15 @@
 struct X {
-    foo: i64,
-    bar: i64,
+    foo: i32,
+    bar: i32,
 }
 
-func ret_opt(ok: bool) ?X {
-    if (!ok) {
-        return null
-    }
-    x: X = { 69, 420 }
+func foo(x: i32) i32 {
     return x
 }
 
-public func main() i32 {
-    x := must ret_opt(true)
-    putint(x.bar)
-    endln();
+func by_value(x: X) i32 {
+    x.foo = 12::i32
+    putint(foo(x));
+    putint(x.foo);
     return 0::i32
 }
-

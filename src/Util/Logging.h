@@ -237,3 +237,6 @@ private:
         fatal("Not Yet Implemented: " fmt __VA_OPT__(, ) __VA_ARGS__); \
     } while (false)
 }
+
+std::ostream &operator<<(std::ostream &os, Util::Logger const &logger);
+std::ostream &operator<<(std::ostream &os, Util::LogLevel level);

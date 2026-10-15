@@ -71,7 +71,7 @@ ASTNode Import::normalized(ASTNode const &n) const
     for (auto const &elem : file_name) {
         if (proxy = ns->find_module(elem); proxy != nullptr) {
             ns = proxy->ns;
-        } else if (!ns->contains(elem)) {
+        } else {
             proxy = parser.make_node<ModuleProxy>(n->location, elem);
             proxy->init_namespace();
             parser.pop_namespace(proxy);

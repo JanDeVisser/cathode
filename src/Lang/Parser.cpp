@@ -1981,6 +1981,15 @@ bool Parser::has_variable(Strings const &name) const
         });
 }
 
+bool Parser::has_variable_here(std::wstring const &name) const
+{
+    if (!namespaces.empty()) {
+        auto const &ns { namespaces.back() };
+        return ns->has_variable(name);
+    }
+    return false;
+}
+
 ASTNode Parser::find_variable(Strings const &name) const
 {
     return find_in_node<ASTNode>(

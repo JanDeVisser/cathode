@@ -387,13 +387,16 @@ BindResult FunctionDefinition::bind(ASTNode const &n) const
 {
     assert(n != nullptr);
     auto &parser { *(n.repo) };
+    trace(Bind, L"Binding function definition {}", name);
     bool  register_me = declaration->bound_type == nullptr;
     if (auto maybe { bind_declaration(declaration, n) }; !maybe.has_value()) {
+        trace(Bind, "Failed to bind declaration");
         return BindError { maybe.error() };
     }
     auto t = declaration->bound_type;
     assert(is<FunctionType>(t));
     if (register_me) {
+        trace(Bind, "Registering");
         if (auto const &found = n->ns->parent->find_function(name, t); found != nullptr && found != n) {
             return n.bind_error(L"Duplicate overload for function `{}` with type `{}`", name, t);
         }
@@ -406,9 +409,12 @@ BindResult FunctionDefinition::bind(ASTNode const &n) const
     if (!decl.generics.empty()) {
         return TypeRegistry::void_;
     }
-    for (auto const &param : decl.parameters) {
-        auto parameter = get<Parameter>(param);
-        if (!parser.has_variable({ parameter.name })) {
+    if (register_me) {
+        for (auto const &param : decl.parameters) {
+            auto parameter = get<Parameter>(param);
+            if (parser.has_variable({ name })) {
+                return n.bind_error("Parameter `{}` shadows object in higher scope with the same name", as_utf8(name));
+            }
             parser.register_variable(parameter.name, param);
         }
     }

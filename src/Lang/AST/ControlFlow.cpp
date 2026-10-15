@@ -109,7 +109,7 @@ BindResult ForStatement::bind(ASTNode const &n) const
 {
     try_bind(range_expr);
     auto range_type = range_expr->bound_type;
-    if (n->ns && !n->ns->contains(range_variable)) {
+    if (n->ns && !n->ns->has_variable_here(range_variable)) {
         if (!is<RangeType>(range_type)
             && !is<SliceType>(range_type)
             && !(is<TypeType>(range_type) && is<EnumType>(get<TypeType>(range_type).type))) {

@@ -181,6 +181,7 @@ struct Parser {
     ASTNodes                   find_overloads(Strings const &name, ASTNodes const &type_args) const;
     void                       register_variable(std::wstring name, ASTNode node);
     bool                       has_variable(Strings const &name) const;
+    bool                       has_variable_here(std::wstring const &name) const;
     ASTNode                    find_variable(Strings const &name) const;
     void                       register_function(std::wstring name, ASTNode node);
     pType                      find_type(Strings const &name) const;

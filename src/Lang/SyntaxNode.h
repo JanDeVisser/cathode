@@ -186,8 +186,14 @@ struct Namespace {
     constexpr static size_t Module = 2;
     constexpr static size_t Type = 3;
 
-    using NSEntry = std::variant<ASTNode, ASTNode, ASTNode, pType>;
-    using NSEntryMap = std::multimap<std::wstring, NSEntry>;
+    struct NSEntry {
+        ASTNode  variable { nullptr };
+        ASTNodes functions {};
+        ASTNode  module { nullptr };
+        pType    type { nullptr };
+    };
+
+    using NSEntryMap = std::map<std::wstring, NSEntry>;
     using NSEntries = std::vector<NSEntry>;
 
     NSNode     id;
@@ -196,11 +202,9 @@ struct Namespace {
     NSNode     parent { nullptr };
 
     explicit Namespace(ASTNode node, NSNode parent = nullptr);
-    bool                   contains(std::wstring const &name) const;
     int                    count(std::wstring const &name) const;
     std::optional<NSEntry> at(std::wstring const &name) const;
     NSEntries              all(std::wstring const &name) const;
-    pType                  type_of(std::wstring const &) const;
     ASTNode                find_module(std::wstring const &name) const;
     bool                   has_module(std::wstring const &name) const;
     void                   register_module(std::wstring const &name, ASTNode mod);
@@ -214,8 +218,10 @@ struct Namespace {
     ASTNode                find_function(std::wstring const &name, pType const &type) const;
     ASTNodes               find_overloads(std::wstring const &name, ASTNodes const &type_args) const;
     bool                   has_variable(std::wstring const &name) const;
+    bool                   has_variable_here(std::wstring const &name) const;
     ASTNode                find_variable(std::wstring const &name) const;
     void                   register_variable(std::wstring name, ASTNode node);
+    pType                  type_of(std::wstring const &name) const;
 };
 
 enum class Visibility {

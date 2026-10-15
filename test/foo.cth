@@ -1,1 +1,10 @@
-"foo"
+struct X {
+  foo: i64,
+  bar: i64,
+}
+
+export func main() i32 {
+  x: X = { 69, 420 }
+  putint(x.foo) endln()
+  return 0::i32
+}

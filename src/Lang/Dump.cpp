@@ -19,6 +19,8 @@
 #include <Lang/SyntaxNode.h>
 #include <Lang/Type.h>
 
+#include "Util/Logging.h"
+
 namespace Lang {
 
 using namespace std::literals;
@@ -535,15 +537,15 @@ std::string to_string(ASTNode const &node)
     case ASTStatus::Normalized:
         break;
     case ASTStatus::Bound:
-        color = "\x1b[32m";
+        color = "\x1b[92m";
         break;
     case ASTStatus::Undetermined:
-        color = "\x1b[33m";
+        color = "\x1b[93m";
         break;
     case ASTStatus::Ambiguous:
     case ASTStatus::BindErrors:
     case ASTStatus::InternalError:
-        color = "\x1b[31m";
+        color = "\x1b[91m";
         break;
     }
     os << color << SyntaxNodeType_name(node->type());
@@ -596,15 +598,34 @@ void dump(ASTNode const &node, std::ostream &os, int indent)
     }
     print_indent(os, indent);
     header(node, os);
-    if (node->ns) {
-        os << " || ns "
+    os << std::endl;
+    if (get_option("dump-namespaces") && node->ns && !node->ns->entries.empty()) {
+        print_indent(os, indent + 4);
+        os << "Namespace "
            << node->ns.id.value();
         if (node->ns->parent) {
             os << "<-" << node->ns->parent.id.value();
         }
-        os << ' ' << node->ns->entries.size();
+        os << ' ' << node->ns->entries.size() << " entries\n";
+        for (auto const &entry : node->ns->entries) {
+            print_indent(os, indent + 8);
+            auto const name { as_utf8(entry.first) };
+            os << name << ": ";
+            auto const e { entry.second };
+            if (e.variable != nullptr) {
+                os << name << ": " << as_utf8(e.variable->bound_type->to_string()) << '\n';
+            }
+            if (e.module != nullptr) {
+                os << name << ": " << as_utf8(e.module->bound_type->to_string()) << '\n';
+            }
+            if (e.type != nullptr) {
+                os << name << ": " << as_utf8(e.type->to_string()) << '\n';
+            }
+            for (auto const &f : e.functions) {
+                os << name << ": " << as_utf8(f->bound_type->to_string()) << '\n';
+            }
+        }
     }
-    os << std::endl;
     std::visit(
         [&node, &indent, &os](auto const &impl) {
             dump(node, impl, os, indent);

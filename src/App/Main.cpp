@@ -353,7 +353,9 @@ int main(int argc, char const **argv)
     auto arg_ix = parse_options(argc, argv);
     auto &logger { Logger::get_logger() };
     if (auto verbose = get_option("verbose"); verbose.has_value()) {
-        logger.level = LogLevel::Info;
+        if (logger.level > LogLevel::Info) {
+            logger.level = LogLevel::Info;
+        }
     }
     switch (logger.level) {
     case LogLevel::Trace: {

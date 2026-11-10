@@ -1985,9 +1985,17 @@ bool Parser::has_variable_here(std::wstring const &name) const
 {
     if (!namespaces.empty()) {
         auto const &ns { namespaces.back() };
-        return ns->has_variable(name);
+        return ns->has_variable_here(name);
     }
     return false;
+}
+
+ASTNode Parser::find_variable_here(std::wstring const &name) const
+{
+    if (!namespaces.empty()) {
+        namespaces.back()->find_variable_here(name);
+    }
+    return nullptr;
 }
 
 ASTNode Parser::find_variable(Strings const &name) const
@@ -2079,7 +2087,7 @@ void Parser::append(Token const &token, char const *message)
 
 void Parser::append(TokenLocation location, std::wstring const &message)
 {
-    append(location, message);
+    append(location, as_utf8(message));
 }
 
 void Parser::append(TokenLocation location, std::string const &message)

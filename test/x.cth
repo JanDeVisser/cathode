@@ -3,11 +3,12 @@ struct X {
     bar: i32,
 }
 
-func foo(x: i32) i32 {
-    return x
+func foo(x: X) i32 {
+    return x.foo
 }
 
-func by_value(x: X) i32 {
+export func main() i32 {
+    x: X
     x.foo = 12::i32
     putint(foo(x));
     putint(x.foo);

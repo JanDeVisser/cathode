@@ -34,8 +34,8 @@ CapturedPayload::CapturedPayload(CapturedPayload const &captured_payload, ASTNod
 
 BindResult CapturedPayload::bind(ASTNode const &n) const
 {
-    try_bind(switch_value);
-    try_bind(switch_case);
+    TRY_BIND(switch_value);
+    TRY_BIND(switch_case);
 
     // FIXME: Error messages
     auto const &tagged_union { get<TaggedUnionType>(switch_value->bound_type) };
@@ -90,8 +90,8 @@ ASTNode SwitchCase::normalized(ASTNode const &n) const
 
 BindResult SwitchCase::bind(ASTNode const &) const
 {
-    try_bind(case_value);
-    try_bind(statement);
+    TRY_BIND(case_value);
+    TRY_BIND(statement);
     return statement->bound_type;
 }
 
@@ -109,7 +109,7 @@ ASTNode SwitchStatement::normalized(ASTNode const &n) const
 
 BindResult SwitchStatement::bind(ASTNode const &n) const
 {
-    try_bind(switch_value);
+    TRY_BIND(switch_value);
     try_bind_nodes(switch_cases);
 
     auto   switch_type { switch_value->bound_type };

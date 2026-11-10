@@ -183,6 +183,7 @@ struct Parser {
     bool                       has_variable(Strings const &name) const;
     bool                       has_variable_here(std::wstring const &name) const;
     ASTNode                    find_variable(Strings const &name) const;
+    ASTNode                    find_variable_here(std::wstring const &name) const;
     void                       register_function(std::wstring name, ASTNode node);
     pType                      find_type(Strings const &name) const;
     ASTNode                    current_function() const;
@@ -256,6 +257,12 @@ struct Parser {
 
 template<typename Node, typename... Args>
 ASTNode make_node(ASTNode from, Args &&...args)
+{
+    return supercede<Node>(from, std::forward<Args>(args)...);
+}
+
+template<typename Node, typename... Args>
+ASTNode supercede(ASTNode from, Args &&...args)
 {
     ASTNode ret = from.repo->make_node<Node>(from->location, std::forward<Args>(args)...);
     ret->ns = from->ns;

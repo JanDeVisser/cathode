@@ -30,6 +30,7 @@ using namespace Util;
 
 #define SyntaxNodeTypes(S) \
     S(Dummy)               \
+    S(Abort)               \
     S(Alias)               \
     S(ArgumentList)        \
     S(AssignPayload)       \
@@ -78,6 +79,7 @@ using namespace Util;
     S(SwitchCase)          \
     S(SwitchStatement)     \
     S(Tag)                 \
+    S(TagOf)               \
     S(TagPayload)          \
     S(TypeSpecification)   \
     S(UnaryExpression)     \
@@ -220,6 +222,7 @@ struct Namespace {
     bool                   has_variable(std::wstring const &name) const;
     bool                   has_variable_here(std::wstring const &name) const;
     ASTNode                find_variable(std::wstring const &name) const;
+    ASTNode                find_variable_here(std::wstring const &name) const;
     void                   register_variable(std::wstring name, ASTNode node);
     pType                  type_of(std::wstring const &name) const;
 };
@@ -235,6 +238,13 @@ struct AbstractSyntaxNode {
 
     ASTNode    normalized(ASTNode const &n) const { return n; }
     BindResult bind(ASTNode const &) const { return nullptr; }
+};
+
+struct Abort : public AbstractSyntaxNode {
+    std::wstring message;
+
+    Abort(std::wstring message);
+    BindResult bind(ASTNode const &n) const;
 };
 
 struct Alias : public AbstractSyntaxNode {
@@ -731,6 +741,15 @@ struct Tag : public AbstractSyntaxNode {
     Tag(int64_t tag_value);
 };
 
+struct TagOf : public AbstractSyntaxNode {
+    pType   tagged_union;
+    ASTNode operand;
+    int64_t tag_value;
+    ASTNode alternative;
+
+    TagOf(pType tagged_union, ASTNode operand, int64_t tag, ASTNode alternative);
+};
+
 struct TagPayload : public AbstractSyntaxNode {
     int64_t tag_value;
     ASTNode payload;
@@ -896,6 +915,7 @@ concept TagReference = std::is_same_v<N, AssignPayload>
     || std::is_same_v<N, TagPayload>;
 
 using SyntaxNode = std::variant<Dummy,
+    Abort,
     Alias,
     ArgumentList,
     AssignPayload,
@@ -944,6 +964,7 @@ using SyntaxNode = std::variant<Dummy,
     SwitchCase,
     SwitchStatement,
     Tag,
+    TagOf,
     TagPayload,
     TypeSpecification,
     UnaryExpression,
@@ -1099,7 +1120,7 @@ extern std::map<Operator, Operator> assign_ops;
 void         dump(ASTNode const &node, std::ostream &os, int indent = 0);
 void         dump(ASTNodes const &nodes, std::ostream &os, int indent = 0);
 void         header(ASTNode const &node, std::ostream &os);
-std::string  to_string(ASTNode const &node);
+std::string  to_string(ASTNode const &node, bool plain = false);
 pType        resolve(ASTNode const &type_node);
 ASTNode      normalize(ASTNode node);
 ASTNodes     normalize(ASTNodes nodes);
@@ -1109,7 +1130,7 @@ ASTNode      stamp(ASTNode node);
 ASTNodes     stamp(ASTNodes nodes);
 ASTNode      fold(ASTNode node);
 
-#define try_bind(expr)                                                   \
+#define TRY_BIND(expr)                                                   \
     ({                                                                   \
         auto const &__expr = (expr);                                     \
         if (auto const maybe = Lang::bind(__expr); !maybe.has_value()) { \

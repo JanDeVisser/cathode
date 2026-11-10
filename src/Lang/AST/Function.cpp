@@ -128,7 +128,7 @@ BindResult Call::bind(ASTNode const &n) const
         if (f->status == ASTStatus::Initialized) {
             f = normalize(f);
         }
-        try_bind(f);
+        TRY_BIND(f);
         auto const &def = get<FunctionDefinition>(f);
         auto const &[_, result] = get<FunctionType>(def.declaration->bound_type);
         return result;
@@ -137,7 +137,7 @@ BindResult Call::bind(ASTNode const &n) const
     ASTNode a { arguments };
     ASTNode f { function };
 
-    auto         arg_types = try_bind(arguments);
+    auto         arg_types = TRY_BIND(arguments);
     auto const  &type_descr = get<TypeList>(arg_types);
     auto        &args { get<ArgumentList>(arguments).arguments };
     std::wstring name;
@@ -198,7 +198,7 @@ BindResult Call::bind(ASTNode const &n) const
             }
             if (made_reference_node) {
                 a = normalize(make_node<ArgumentList>(arguments, reference_nodes));
-                try_bind(a);
+                TRY_BIND(a);
             }
             return func_def;
         }
@@ -255,7 +255,7 @@ BindResult Call::bind(ASTNode const &n) const
             if (func_def->status == ASTStatus::Initialized) {
                 func_def = normalize(func_def);
             }
-            try_bind(func_def);
+            TRY_BIND(func_def);
             bound_overloads.push_back(func_def);
         }
     }
@@ -346,7 +346,7 @@ BindResult FunctionDeclaration::bind(ASTNode const &) const
 {
     return TypeRegistry::the().function_of(
         try_bind_nodes(parameters),
-        get<TypeType>(try_bind(return_type)).type);
+        get<TypeType>(TRY_BIND(return_type)).type);
 }
 
 FunctionDefinition::FunctionDefinition(std::wstring name, ASTNode declaration, ASTNode implementation)
@@ -418,7 +418,7 @@ BindResult FunctionDefinition::bind(ASTNode const &n) const
             parser.register_variable(parameter.name, param);
         }
     }
-    try_bind(implementation);
+    TRY_BIND(implementation);
     return t;
 }
 
@@ -435,7 +435,7 @@ ASTNode Parameter::normalized(ASTNode const &n) const
 
 BindResult Parameter::bind(ASTNode const &) const
 {
-    return get<TypeType>(try_bind(type_name)).type;
+    return get<TypeType>(TRY_BIND(type_name)).type;
 }
 
 }

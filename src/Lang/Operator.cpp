@@ -63,7 +63,7 @@ std::vector<UnaryOperator> unary_ops = {
     { Operator::Length, TypeKind::EnumType, PseudoType::String },
     { Operator::Unwrap, TypeKind::OptionalType, PseudoType::Refer },
     { Operator::Unwrap, TypeKind::ResultType, PseudoType::Refer },
-    { Operator::Unwrap, TypeKind::TaggedUnionType, PseudoType::Refer },
+    { Operator::Unwrap, TypeKind::TaggedUnionTag, PseudoType::Refer },
     { Operator::UnwrapError, TypeKind::ResultType, PseudoType::Error },
 };
 

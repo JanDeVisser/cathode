@@ -12,6 +12,7 @@ add_library(
         QBE.cpp
         Type.cpp
         Value.cpp
+        Generate/Abort.cpp
         Generate/ArgumentList.cpp
         Generate/BinaryExpression.cpp
         Generate/Block.cpp

@@ -53,6 +53,7 @@ pType TypeRegistry::string_builder;
 pType TypeRegistry::cstring;
 pType TypeRegistry::character;
 pType TypeRegistry::void_;
+pType TypeRegistry::no_return;
 pType TypeRegistry::pointer;
 pType TypeRegistry::module;
 
@@ -287,6 +288,39 @@ pType EnumType::underlying() const
     return underlying_type;
 }
 
+std::wstring TaggedUnionTag::to_string() const
+{
+    return std::format(L"TaggedUnion({}).{}({})", tagged_union->to_string(), value, payload->to_string());
+}
+
+std::wstring TaggedUnionTag::encode() const
+{
+    auto ret { tagged_union->encode() };
+    ret += value;
+    ret += payload->encode();
+    return ret;
+}
+
+intptr_t TaggedUnionTag::size_of() const
+{
+    return tagged_union->size_of();
+}
+
+intptr_t TaggedUnionTag::align_of() const
+{
+    return tagged_union->align_of();
+}
+
+pType TaggedUnionTag::underlying() const
+{
+    return get<TaggedUnionType>(tagged_union).underlying();
+}
+
+std::optional<std::wstring> TaggedUnionTag::label_for() const
+{
+    return get<TaggedUnionType>(tagged_union).label_for(value);
+}
+
 std::wstring TaggedUnionType::to_string() const
 {
     return std::format(L"TaggedUnion({} tags)", tags.size());
@@ -348,6 +382,16 @@ std::optional<int64_t> TaggedUnionType::value_for(std::wstring_view label) const
 std::optional<std::wstring> TaggedUnionType::label_for(int64_t value) const
 {
     return get<EnumType>(tag_type).label_for(value);
+}
+
+pType TaggedUnionType::tagged_union_tag_type(int64_t tag) const
+{
+    for (auto const &t : tags) {
+        if (t.value == tag) {
+            return t.taggedunion_tag;
+        }
+    }
+    return nullptr;
 }
 
 pType TaggedUnionType::payload_for(std::wstring_view label) const
@@ -582,6 +626,9 @@ bool Type::compatible(pType const &other) const
     if (id == other) {
         return true;
     }
+    if (is<NoReturnType>(id) || is<NoReturnType>(other)) {
+        return true;
+    }
     if (is<ReferenceType>(id)) {
         return get<ReferenceType>(id).referencing->compatible(other);
     }
@@ -636,6 +683,9 @@ bool Type::compatible(pType const &other) const
 bool Type::assignable_to(pType const &lhs) const
 {
     if (id == lhs) {
+        return true;
+    }
+    if (kind() == TypeKind::NoReturnType) {
         return true;
     }
     auto rhs = id;
@@ -789,6 +839,7 @@ TypeRegistry::TypeRegistry()
     cstring = make_type(L"cstring", ZeroTerminatedArray { TypeRegistry::u8 });
     character = make_type(L"char", TypeAlias { TypeRegistry::u32 });
     void_ = make_type(L"void", VoidType { });
+    no_return = make_type(L"noreturn", NoReturnType {});
     pointer = make_type(L"pointer", PointerType { void_ });
     module = make_type(L"module", ModuleType { });
 }

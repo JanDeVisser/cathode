@@ -502,6 +502,13 @@ ExecResult execute(ILFunction const &il, pFrame const &frame, CallDef const &ins
 }
 
 template<>
+ExecResult execute(ILFunction const &, pFrame const &frame, CommentDef const &)
+{
+    ++frame->ip;
+    return {};
+}
+
+template<>
 ExecResult execute(ILFunction const &, pFrame const &frame, CopyDef const &instruction)
 {
     assign(frame, instruction.target, get(frame, instruction.expr));

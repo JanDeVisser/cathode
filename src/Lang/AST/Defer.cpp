@@ -30,7 +30,7 @@ ASTNode DeferStatement::normalized(ASTNode const &n) const
 
 BindResult DeferStatement::bind(ASTNode const &) const
 {
-    try_bind(statement);
+    TRY_BIND(statement);
     return TypeRegistry::void_;
 }
 

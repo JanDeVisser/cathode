@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <cstdint>
+
 #include <Util/Enumerate.h>
 #include <Util/StringUtil.h>
 #include <Util/Utf8.h>
@@ -31,7 +33,7 @@ ASTNode Alias::normalized(ASTNode const &n) const
 BindResult Alias::bind(ASTNode const &n) const
 {
     Parser &parser { *n.repo };
-    try_bind(aliased_type);
+    TRY_BIND(aliased_type);
     if (aliased_type->bound_type != nullptr) {
         auto aliased_type_type { get<TypeType>(aliased_type->bound_type).type };
         auto type { TypeRegistry::the().alias_for(aliased_type_type) };
@@ -128,6 +130,12 @@ BindResult Enum::bind(ASTNode const &n) const
     }
     tagged_union.tag_type = enum_type;
     auto ret = make_type(name, tagged_union);
+    auto &tu = std::get<TaggedUnionType>(ret->description);
+    for (auto &tag : tu.tags) {
+        tag.taggedunion_tag = make_type(
+            std::format(L"{}.{}", name, *enoom.label_for(tag.value)),
+            TaggedUnionTag { ret, tag.value, tag.payload });
+    }
     parser.register_type(name, ret);
     return make_type(name, TypeType { .type = ret });
 }
@@ -165,7 +173,7 @@ BindResult Struct::bind(ASTNode const &n) const
     auto              &parser { *(n.repo) };
     StructType::Fields fields;
     for (auto const &m : members) {
-        try_bind(m);
+        TRY_BIND(m);
         fields.emplace_back(get<StructMember>(m).label, m->bound_type);
     }
     pType type = TypeRegistry::the().struct_of(fields);
@@ -187,11 +195,25 @@ ASTNode StructMember::normalized(ASTNode const &n) const
 
 BindResult StructMember::bind(ASTNode const &) const
 {
-    return get<TypeType>(try_bind(member_type)).type;
+    return get<TypeType>(TRY_BIND(member_type)).type;
 }
 
 Tag::Tag(int64_t tag_value)
     : tag_value(tag_value)
+{
+}
+
+TagOf::TagOf(pType tagged_union, ASTNode operand, int64_t tag, ASTNode alternative)
+    : tagged_union(std::move(tagged_union))
+    , operand(std::move(operand))
+    , tag_value(tag)
+    , alternative(std::move(alternative))
+{
+}
+
+TagPayload::TagPayload(int64_t tag_value, ASTNode payload)
+    : tag_value(tag_value)
+    , payload(std::move(payload))
 {
 }
 

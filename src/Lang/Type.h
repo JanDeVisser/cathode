@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <format>
-#include <iterator>
 #include <map>
 #include <sstream>
 #include <string>
@@ -29,6 +28,7 @@ namespace Lang {
 
 #define TypeKinds(S)       \
     S(VoidType)            \
+    S(NoReturnType)        \
     S(PointerType)         \
     S(ModuleType)          \
     S(FunctionType)        \
@@ -44,6 +44,7 @@ namespace Lang {
     S(DynArray)            \
     S(RangeType)           \
     S(EnumType)            \
+    S(TaggedUnionTag)      \
     S(TaggedUnionType)     \
     S(OptionalType)        \
     S(ResultType)          \
@@ -151,6 +152,28 @@ struct VoidType {
     std::wstring to_string() const
     {
         return L"Void";
+    }
+
+    intptr_t size_of() const
+    {
+        return 0;
+    }
+
+    intptr_t align_of() const
+    {
+        return 0;
+    }
+
+    std::wstring encode() const
+    {
+        return L"";
+    }
+};
+
+struct NoReturnType {
+    std::wstring to_string() const
+    {
+        return L"NoReturn";
     }
 
     intptr_t size_of() const
@@ -369,10 +392,24 @@ struct EnumType {
     std::wstring                encode() const;
 };
 
+struct TaggedUnionTag {
+    pType   tagged_union;
+    int64_t value;
+    pType   payload;
+
+    std::wstring                to_string() const;
+    std::wstring                encode() const;
+    intptr_t                    size_of() const;
+    intptr_t                    align_of() const;
+    pType                       underlying() const;
+    std::optional<std::wstring> label_for() const;
+};
+
 struct TaggedUnionType {
     struct Tag {
         int64_t value;
         pType   payload;
+        pType   taggedunion_tag { nullptr };
     };
     using Tags = std::vector<Tag>;
 
@@ -385,6 +422,7 @@ struct TaggedUnionType {
     bool                        is_valid(std::wstring_view label) const;
     std::optional<int64_t>      value_for(std::wstring_view label) const;
     std::optional<std::wstring> label_for(int64_t value) const;
+    pType                       tagged_union_tag_type(int64_t tag) const;
     pType                       payload_for(std::wstring_view label) const;
     pType                       payload_for(int64_t tag) const;
     pType                       underlying() const;
@@ -527,6 +565,7 @@ struct TypeRegistry {
     static pType cstring;
     static pType character;
     static pType void_;
+    static pType no_return;
     static pType pointer;
     static pType module;
 
@@ -617,6 +656,12 @@ template<enumerated_type E>
 std::optional<std::wstring> label_for(E const &type, int64_t value)
 {
     return type.label_for(value).value_or(L"??");
+}
+
+template<>
+inline std::optional<std::wstring> label_for(TaggedUnionTag const &type, int64_t value)
+{
+    return get<TaggedUnionType>(type.tagged_union).label_for(value);
 }
 
 std::optional<std::wstring> label_for(pType const &type, int64_t value);

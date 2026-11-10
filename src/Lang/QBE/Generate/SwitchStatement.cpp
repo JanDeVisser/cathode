@@ -16,7 +16,7 @@ GenResult generate_qbe_node(ASTNode const &n, SwitchStatement const &impl, QBECo
         auto generate_case_value = [&switch_var, &ctx](ILValue const &value, ASTNode const &n, QBELabel const &value_ok, QBELabel const &value_not_ok) -> void {
             std::visit(
                 overloads {
-                    [&n, &switch_var, &ctx, &value, &value_ok, &value_not_ok](Tag const &tag) -> void {
+                    [&n, &switch_var, &ctx, &value, &value_ok, &value_not_ok](TagOf const &tag) -> void {
                         if (is<EnumType>(n->bound_type)) {
                             auto v = std::get<ILValues>(value.inner)[1];
                             auto match { ILValue::local(++ctx.next_var, ILBaseType::W) };
@@ -25,9 +25,9 @@ GenResult generate_qbe_node(ASTNode const &n, SwitchStatement const &impl, QBECo
                             return { };
                         }
                         check_tagged_union(
-                            tag.tag_value,
                             switch_var,
                             get<TaggedUnionType>(n->bound_type),
+                            tag.tag_value,
                             value_not_ok,
                             value_ok,
                             ctx);

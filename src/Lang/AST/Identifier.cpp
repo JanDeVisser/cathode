@@ -70,8 +70,8 @@ ASTNode VariableDeclaration::normalized(ASTNode const &n) const
 
 BindResult VariableDeclaration::bind(ASTNode const &n) const
 {
-    auto  my_type = (type_name != nullptr) ? try_bind(type_name) : nullptr;
-    auto  init_type = (initializer != nullptr) ? try_bind(initializer) : nullptr;
+    auto  my_type = (type_name != nullptr) ? TRY_BIND(type_name) : nullptr;
+    auto  init_type = (initializer != nullptr) ? TRY_BIND(initializer) : nullptr;
     auto &parser = *(n.repo);
 
     assert(my_type != nullptr || init_type != nullptr);
@@ -86,7 +86,7 @@ BindResult VariableDeclaration::bind(ASTNode const &n) const
             "Type mismatch between declared type `{}` of `{}` and type of initializer value `{}`",
             as_utf8(my_type->name), as_utf8(name), as_utf8(init_type->name));
     }
-    if (n.repo->has_variable({ name })) {
+    if (parser.has_variable_here({ name }) && parser.find_variable({ name }) != n) {
         return n.bind_error("Duplicate variable name `{}`", as_utf8(name));
     }
     parser.register_variable(name, n);

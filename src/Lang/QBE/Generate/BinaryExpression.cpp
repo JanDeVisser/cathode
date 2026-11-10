@@ -1,5 +1,7 @@
 #include <Lang/QBE/Generate/Generate.h>
 
+#include "Lang/Type.h"
+
 namespace Lang::QBE {
 
 GenBinExpr make_binexpr(ASTNode const &n, QBEOperand lhs, Operator op, QBEOperand rhs, QBEContext &ctx)
@@ -59,6 +61,15 @@ GenBinExpr make_binexpr(ASTNode const &n, QBEOperand lhs, Operator op, QBEOperan
                                 UNREACHABLE();
                             } },
                         type->description);
+                }
+                return QBEBinExpr { n, lhs, op, rhs };
+            },
+            [&n, &lhs, &op, &rhs, &ctx](TaggedUnionType const &tagged_union, TaggedUnionType const &) -> GenBinExpr {
+                if (op == Operator::MemberAccess) {
+                    auto const &value = get<Tag>(rhs.node).tag_value;
+                    lhs = TRY_ENSURE_GENERATED(lhs, ctx);
+                    lhs = TRY_DEREFERENCE(lhs, ctx);
+                    rhs.set_value(ILValue::integer(value, qbe_type(tagged_union.underlying())));
                 }
                 return QBEBinExpr { n, lhs, op, rhs };
             },

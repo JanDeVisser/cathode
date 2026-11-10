@@ -4,19 +4,30 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <string>
+
 #include <Util/StringUtil.h>
 #include <Util/Utf8.h>
 
 #include <Lang/Operator.h>
 #include <Lang/Parser.h>
+#include <Lang/QBE/QBE.h>
 #include <Lang/SyntaxNode.h>
 #include <Lang/Type.h>
-
-#include <Lang/QBE/QBE.h>
 
 namespace Lang {
 
 using namespace std::literals;
+
+Abort::Abort(std::wstring message)
+    : message(std::move(message))
+{
+}
+
+BindResult Abort::bind(ASTNode const &) const
+{
+    return TypeRegistry::no_return;
+}
 
 Block::Block(ASTNodes statements, Label label)
     : statements(std::move(statements))
@@ -107,7 +118,7 @@ ASTNode ForStatement::normalized(ASTNode const &n) const
 
 BindResult ForStatement::bind(ASTNode const &n) const
 {
-    try_bind(range_expr);
+    TRY_BIND(range_expr);
     auto range_type = range_expr->bound_type;
     if (n->ns && !n->ns->has_variable_here(range_variable)) {
         if (!is<RangeType>(range_type)
@@ -134,7 +145,7 @@ BindResult ForStatement::bind(ASTNode const &n) const
         }
         n->ns->register_variable(range_variable, variable_node);
     }
-    try_bind(statement);
+    TRY_BIND(statement);
     return statement->bound_type;
 }
 
@@ -159,15 +170,15 @@ ASTNode IfStatement::normalized(ASTNode const &n) const
 
 BindResult IfStatement::bind(ASTNode const &n) const
 {
-    try_bind(condition);
+    TRY_BIND(condition);
     if (!condition->bound_type->assignable_to(TypeRegistry::boolean)) {
         return n.bind_error(
             "`if` loop condition is a `{}`, not a boolean",
             as_utf8(condition->bound_type->name));
     }
-    try_bind(if_branch);
+    TRY_BIND(if_branch);
     if (else_branch != nullptr) {
-        try_bind(else_branch);
+        TRY_BIND(else_branch);
     }
     auto if_type = if_branch->bound_type;
     if (else_branch == nullptr || else_branch->bound_type == if_type) {
@@ -191,7 +202,7 @@ ASTNode LoopStatement::normalized(ASTNode const &n) const
 
 BindResult LoopStatement::bind(ASTNode const &) const
 {
-    return try_bind(statement);
+    return TRY_BIND(statement);
 }
 
 Return::Return(ASTNode expression)
@@ -206,14 +217,14 @@ ASTNode Return::normalized(ASTNode const &n) const
 
 BindResult Return::bind(ASTNode const &n) const
 {
-    try_bind(expression);
+    TRY_BIND(expression);
     auto &parser { *(n.repo) };
     auto  func = parser.current_function();
     assert(func != nullptr && is<FunctionDefinition>(func));
     auto func_signature = get<FunctionDefinition>(func).declaration->bound_type;
     assert(is<FunctionType>(func_signature));
     auto return_type = get<FunctionType>(func_signature).result;
-    if (expression != nullptr && !expression->bound_type->assignable_to(return_type)) {
+    if (expression != nullptr && !expression->bound_type->compatible(return_type) && !expression->bound_type->assignable_to(return_type)) {
         return n.bind_error(
             L"`return` expression is a `{}` and is not assignable to a `{}`",
             expression->bound_type->name, return_type->name);
@@ -251,12 +262,12 @@ ASTNode WhileStatement::normalized(ASTNode const &n) const
 
 BindResult WhileStatement::bind(ASTNode const &n) const
 {
-    try_bind(condition);
+    TRY_BIND(condition);
     pType t = condition->bound_type;
     if (!is<BoolType>(t)) {
         return n.bind_error("`while` loop condition is a `{}`, not a boolean", as_utf8(t->name));
     }
-    return try_bind(statement);
+    return TRY_BIND(statement);
 }
 
 Yield::Yield(Label label, ASTNode statement)
@@ -272,7 +283,7 @@ ASTNode Yield::normalized(ASTNode const &n) const
 
 BindResult Yield::bind(ASTNode const &) const
 {
-    return try_bind(statement);
+    return TRY_BIND(statement);
 }
 
 }

@@ -135,7 +135,7 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
 {
     assert(n != nullptr);
     Parser &parser = *(n.repo);
-    auto    lhs_type = try_bind(lhs);
+    auto    lhs_type = TRY_BIND(lhs);
 
     if (op == Operator::MemberAccess) {
         if (is<TypeType>(lhs_type)) {
@@ -234,12 +234,12 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                     }
                     auto const &label = get<Identifier>(rhs).identifier;
                     if (auto v = tagged_union.value_for(label); v) {
-                        make_node<Tag>(n, *v);
-                        return lhs_value_type;
+                        make_node<TagOf>(n, lhs_value_type, lhs, *v, parser.make_node<Dummy>());
+                        return tagged_union.tagged_union_tag_type(*v);
                     }
                     return parser.bind_error(
                         rhs->location,
-                        "Unknown tagged union value `{}`", as_utf8(label));
+                        "Unknown enumeration value `{}`", as_utf8(label));
                 },
                 [&parser, &lhs_value_type, this](auto const &) -> BindResult {
                     return parser.bind_error(
@@ -250,17 +250,13 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
     }
 
     auto lhs_value_type = lhs_type->value_type();
-    auto rhs_type = try_bind(rhs);
+    auto rhs_type = TRY_BIND(rhs);
     auto rhs_value_type = rhs_type->value_type();
 
     if (op == Operator::Assign) {
-        if (is<BinaryExpression>(lhs) && get<BinaryExpression>(lhs).op == Operator::MemberAccess) {
-            auto const &member_access { get<BinaryExpression>(lhs) };
-            if (!is<TaggedUnionType>(lhs_value_type) || !is<Tag>(member_access.rhs)) {
-                return parser.bind_error(lhs->location, "Only tagged union values can be assigned a payload");
-            }
+        if (is<TaggedUnionType>(lhs_value_type) && is<Tag>(lhs)) {
             auto const        &tagged_union { get<TaggedUnionType>(lhs_value_type) };
-            auto const        &tag_value { get<Tag>(member_access.rhs) };
+            auto const        &tag_value { get<Tag>(lhs) };
             auto const        &payload_type { tagged_union.payload_for(tag_value.tag_value) };
             std::wstring const label { tagged_union.label_for(tag_value.tag_value).value_or(L"??") };
             if (payload_type == nullptr || payload_type == TypeRegistry::void_) {
@@ -269,14 +265,19 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
                     L"Value `{}` of tagged union type `{}` does not take a payload",
                     label, lhs_value_type->name);
             }
-            if (!payload_type->compatible(rhs_value_type)
-                && !rhs_value_type->assignable_to(payload_type)) {
+            if (!payload_type->compatible(rhs_value_type) && !rhs_value_type->assignable_to(payload_type)) {
                 return parser.bind_error(
                     n->location,
                     L"Tagged union value `{}` requires payload of type `{}` instead of `{}`",
                     label, payload_type->name, rhs_value_type->name);
             }
-            return lhs_type;
+            make_node<TagPayload>(n, tag_value.tag_value, rhs);
+            return lhs_value_type;
+        } else if (is<BinaryExpression>(lhs)) {
+            auto const &member_access { get<BinaryExpression>(lhs) };
+            if (member_access.op != Operator::MemberAccess || !is<StructType>(member_access.lhs->bound_type->value_type())) {
+                return parser.bind_error(lhs->location, "Expected struct field"); // FIXME
+            }
         }
         if (!lhs_value_type->compatible(rhs_value_type) && !rhs_value_type->assignable_to(lhs_value_type)) {
             return parser.bind_error(
@@ -297,6 +298,23 @@ BindResult BinaryExpression::bind(ASTNode const &n) const
 
     if (op == Operator::Call && is<FunctionType>(lhs_value_type) && is<TypeList>(rhs_value_type)) {
         fatal("The `Call` binary operator should be elided during the normalization phase");
+    }
+
+    if (op == Operator::LogicalOr && is<TagOf>(lhs)) {
+        auto const &tag_of { get<TagOf>(lhs) };
+        auto const &tag_type { get<TaggedUnionTag>(lhs_value_type) };
+        if (!tag_type.payload || tag_type.payload == TypeRegistry::void_) {
+            return parser.bind_error(
+                lhs->location,
+                "Conditional unwrap operator requires a tag type with a payload as left hand side");
+        }
+        if (!rhs_value_type->assignable_to(tag_type.payload) || !rhs_value_type->compatible(tag_type.payload)) {
+            return parser.bind_error(
+                lhs->location,
+                "Right-hand side of conditional unwrap operator is different from left-hand tag type payload");
+        }
+        make_node<TagOf>(n, tag_of.tagged_union, tag_of.operand, tag_of.tag_value, rhs);
+        return tag_type.payload;
     }
 
     if (op == Operator::Cast) {
@@ -421,7 +439,8 @@ BindResult UnaryExpression::bind(ASTNode const &n) const
 {
     assert(n != nullptr);
     auto &parser { *(n.repo) };
-    auto  operand_type = try_bind(operand);
+    auto const operand_type = TRY_BIND(operand);
+    auto const operand_value_type = operand_type->value_type();
     if (op == Operator::Sizeof) {
         return TypeRegistry::i64;
     }
@@ -433,6 +452,22 @@ BindResult UnaryExpression::bind(ASTNode const &n) const
             return parser.bind_error(n->location, "Cannot take address of constant");
         }
         return TypeRegistry::the().referencing(operand_type);
+    }
+    if (op == Operator::Unwrap && is<TagOf>(operand)) {
+        auto const &tag_of { get<TagOf>(operand) };
+        auto const &tag_type { get<TaggedUnionTag>(operand_value_type) };
+        if (!tag_type.payload || tag_type.payload == TypeRegistry::void_) {
+            return parser.bind_error(
+                n->location,
+                "Unwrap operator requires a tag type with a payload");
+        }
+        auto abort_node = parser.make_node<Abort>(
+            std::format(L"Expected value `{}` ({}) of type `{}` at location {}:{}",
+                *tag_type.label_for(), tag_type.value, operand_value_type, n->location.line, n->location.column));
+        abort_node = normalize(abort_node);
+        TRY_BIND(abort_node);
+        make_node<TagOf>(n, tag_of.tagged_union, tag_of.operand, tag_of.tag_value, abort_node);
+        return tag_type.payload;
     }
     for (auto const &[oper, the_operand, result] : unary_ops) {
 
@@ -472,6 +507,19 @@ BindResult UnaryExpression::bind(ASTNode const &n) const
                                                 n->location,
                                                 L"Cannot take reference to value `{}` of tagged union `{}` because it takes no payload",
                                                 tagged_union.label_for(tag.tag_value).value_or(L"??"),
+                                                operand->bound_type->to_string());
+                                        }
+                                        return TypeRegistry::the().referencing(t);
+                                    },
+                                    [this, &parser, &n](TaggedUnionTag const &tag_type) -> BindResult {
+                                        assert(operand->type() == SyntaxNodeType::TagOf);
+                                        auto const &tag { get<TagOf>(operand) };
+                                        auto const &t { tag_type.payload };
+                                        if (t == nullptr) {
+                                            return parser.bind_error(
+                                                n->location,
+                                                L"Cannot take reference to value `{}` of tagged union `{}` because it takes no payload",
+                                                get<TaggedUnionType>(tag_type.tagged_union).label_for(tag.tag_value).value_or(L"??"),
                                                 operand->bound_type->to_string());
                                         }
                                         return TypeRegistry::the().referencing(t);

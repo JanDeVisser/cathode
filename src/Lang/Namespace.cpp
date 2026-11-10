@@ -129,6 +129,11 @@ bool Namespace::has_variable_here(std::wstring const &name) const
     return entries.contains(name) && (entries.at(name).variable != nullptr);
 }
 
+ASTNode Namespace::find_variable_here(std::wstring const &name) const
+{
+    return has_variable_here(name) ? entries.at(name).variable : nullptr;
+}
+
 void Namespace::register_variable(std::wstring name, ASTNode variable)
 {
     assert(!entries.contains(name) || entries.at(name).variable == nullptr);
@@ -216,7 +221,7 @@ pType Namespace::type_of(std::wstring const &name) const
         } else if (entry.module != nullptr) {
             return TypeRegistry::module;
         } else if (entry.type != nullptr) {
-            return entry.type;
+            return TypeRegistry::the().type_of(entry.type);
         }
     }
     return nullptr;

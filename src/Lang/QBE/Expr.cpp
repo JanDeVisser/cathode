@@ -69,11 +69,20 @@ static constexpr wchar_t const *result_error { L"Unwrapping result value contain
 static constexpr wchar_t const *result_success { L"Unwrapping error of result value containing success" };
 static constexpr wchar_t const *wrong_tagged_value { L"Unwrapping tagged value with wrong value" };
 
+void qbe_abort(std::wstring_view const &message, QBEContext &ctx)
+{
+    ctx += CallDef {
+        L"libcathodert:cathode$abort",
+        ILValue::null(),
+        { ctx.add_string(message), ILValue::integer(message.length(), ILBaseType::L) }
+    };
+}
+
 static void check_division_by_zero(QBEOperand const &rhs, QBEContext &ctx)
 {
     auto cmp_zero { ILValue::local(++ctx.next_var, ILBaseType::W) };
-    ctx += ExprDef { ILValue::integer(0, rhs.get_value().type), rhs.get_value(), ILOperation::NotEqual, cmp_zero },
-        CallDef { L"libcathodert:cathode$assert", ILValue::null(), { cmp_zero, ctx.add_string(division_by_zero), ILValue::integer(wcslen(division_by_zero), ILBaseType::L) } };
+    ctx += ExprDef { ILValue::integer(0, rhs.get_value().type), rhs.get_value(), ILOperation::NotEqual, cmp_zero };
+    qbe_abort(division_by_zero, ctx);
 }
 
 static void check_optional(QBEOperand const &val, OptionalType const &optional, QBELabel const &value_unset, QBELabel const &value_set, QBEContext &ctx)
@@ -102,48 +111,41 @@ static void check_result(bool success, QBEOperand const &val, ResultType const &
         JnzDef { zero, value_not_ok, value_ok };
 }
 
-void check_tagged_union(int64_t required, QBEOperand const &val, TaggedUnionType const &tagged_union, QBELabel const &value_not_ok, QBELabel const &value_ok, QBEContext &ctx)
+void check_tagged_union(QBEOperand const &val, TaggedUnionType const &tagged_union, int64_t value, QBELabel const &value_not_ok, QBELabel const &value_ok, QBEContext &ctx)
 {
     auto eql { ILValue::local(++ctx.next_var, ILBaseType::W) };
     auto tag_ptr { ILValue::pointer(++ctx.next_var) };
     auto tag_val { ILValue::local(++ctx.next_var, ILBaseType::W) };
     ctx += ExprDef { val.get_value(), ILValue::integer(tagged_union.tag_offset(), ILBaseType::L), ILOperation::Add, tag_ptr },
         LoadDef { tag_ptr, tag_val },
-        ExprDef { ILValue::integer(required, ILBaseType::W), tag_val, ILOperation::Equals, eql },
+        ExprDef { ILValue::integer(value, ILBaseType::W), tag_val, ILOperation::Equals, eql },
         JnzDef { eql, value_ok, value_not_ok };
 }
 
 static void optional_must(QBEOperand const &val, OptionalType const &optional, QBEContext &ctx)
 {
     check_optional(val, optional, QBELabel { LabelType::Top, ctx.current_node.back() }, { LabelType::Else, ctx.current_node.back() }, ctx);
-    ctx += LabelDef { LabelType::Top, ctx.current_node.back() },
-        CallDef { L"libcathodert:cathode$abort", ILValue::null(), { ctx.add_string(empty_optional), ILValue::integer(wcslen(empty_optional), ILBaseType::L) } },
-        LabelDef { LabelType::Else, ctx.current_node.back() };
+    ctx += LabelDef { LabelType::Top, ctx.current_node.back() };
+    qbe_abort(empty_optional, ctx);
+    ctx += LabelDef { LabelType::Else, ctx.current_node.back() };
 }
 
 static void result_must(bool success, QBEOperand const &val, ResultType const &result, QBEContext &ctx)
 {
     check_result(success, val, result, QBELabel { LabelType::Top, ctx.current_node.back() }, QBELabel { LabelType::Else, ctx.current_node.back() }, ctx);
-    ctx += LabelDef { LabelType::Top, ctx.current_node.back() },
-        CallDef {
-            L"libcathodert:cathode$abort",
-            ILValue::null(),
-            { ctx.add_string((success) ? result_error : result_success),
-                ILValue::integer(wcslen((success) ? result_error : result_success),
-                    ILBaseType::L) }
-        },
-        LabelDef { LabelType::Else, ctx.current_node.back() };
+    ctx += LabelDef { LabelType::Top, ctx.current_node.back() };
+    qbe_abort((success) ? result_error : result_success, ctx);
+    ctx += LabelDef { LabelType::Else, ctx.current_node.back() };
 }
 
-static void tagged_union_must(QBEOperand const &val, TaggedUnionType const &tagged_union, QBEContext &ctx)
+static void tagged_union_must(QBEOperand const &val, TaggedUnionTag const &tagged_union_tag, QBEContext &ctx)
 {
     QBELabel carry_on = QBELabel { LabelType::Else, ctx.current_node.back() };
     QBELabel abort_mission = QBELabel { LabelType::Top, ctx.current_node.back() };
-    auto const &tag { get<Tag>(val.node) };
-    check_tagged_union(tag.tag_value, val, tagged_union, abort_mission, carry_on, ctx);
-    ctx += LabelDef { abort_mission },
-        CallDef { L"libcathodert:cathode$abort", ILValue::null(), { ctx.add_string(wrong_tagged_value), ILValue::integer(wcslen(wrong_tagged_value), ILBaseType::L) } },
-        LabelDef { carry_on };
+    check_tagged_union(val, get<TaggedUnionType>(tagged_union_tag.tagged_union), tagged_union_tag.value, abort_mission, carry_on, ctx);
+    ctx += LabelDef { abort_mission };
+    qbe_abort(wrong_tagged_value, ctx);
+    ctx += LabelDef { carry_on };
 }
 
 static GenResult unwrap_optional(ASTNode const &unwrapped, QBEOperand const &optional, QBEContext &ctx)
@@ -167,9 +169,8 @@ static GenResult unwrap_result(bool success, ASTNode const &unwrapped, QBEOperan
     return TRY_DEREFERENCE(reference, ctx);
 }
 
-static GenResult unwrap_tagged_union(ASTNode const &unwrapped, QBEOperand const &result, QBEContext &ctx)
+GenResult unwrap_tagged_union(ASTNode const &unwrapped, QBEOperand const &result, QBEContext &ctx)
 {
-    auto tagged_union = get<TaggedUnionType>(result.ptype);
     auto reference = QBEOperand {
         unwrapped,
         TypeRegistry::the().referencing(result.node->bound_type),
@@ -358,33 +359,6 @@ GenResult qbe_operator(QBEBinExpr const &expr, ResultType const &lhs, auto const
         ctx += CopyDef { val.value().get_value(), ret },
             LabelDef { done };
         return QBEOperand { expr.node, lhs.success, ret };
-    }
-    NYI("QBE mapping for result operator `{}`", Operator_name(expr.op));
-}
-
-GenResult qbe_operator(QBEBinExpr const &expr, TaggedUnionType const &lhs, auto const &, QBEContext &ctx)
-{
-    if (expr.op == Operator::LogicalOr) {
-        auto const &payload { lhs.payload_for(get<Tag>(expr.lhs.node).tag_value) };
-        assert(expr.rhs.ptype->compatible(payload) || expr.rhs.ptype->assignable_to(payload));
-        QBELabel use_value = { LabelType::Top, expr.node };
-        QBELabel use_alternative = { LabelType::Else, expr.node };
-        QBELabel done = { LabelType::Bottom, expr.node };
-        auto     ret = ILValue::local(++ctx.next_var, qbe_type(payload));
-        auto     deref = TRY_DEREFERENCE(expr.lhs, ctx);
-        check_tagged_union(get<Tag>(expr.lhs.node).tag_value, deref, lhs, use_alternative, use_value, ctx);
-        ctx += LabelDef { use_alternative };
-        auto alternative = TRY_DEREFERENCE(expr.rhs, ctx);
-        ctx += CopyDef { alternative.get_value(), ret },
-            JmpDef { done },
-            LabelDef { use_value };
-        auto val = unwrap_tagged_union(expr.node, deref, ctx);
-        if (!val) {
-            return std::unexpected(val.error());
-        }
-        ctx += CopyDef { val.value().get_value(), ret },
-            LabelDef { done };
-        return QBEOperand { expr.node, payload, ret };
     }
     NYI("QBE mapping for result operator `{}`", Operator_name(expr.op));
 }
@@ -604,12 +578,12 @@ GenResult qbe_operator(QBEUnaryExpr const &expr, SliceType const &slice, QBECont
 }
 
 template<>
-GenResult qbe_operator(QBEUnaryExpr const &expr, TaggedUnionType const &tagged_union, QBEContext &ctx)
+GenResult qbe_operator(QBEUnaryExpr const &expr, TaggedUnionTag const &tagged_union_tag, QBEContext &ctx)
 {
     auto operand = TRY_DEREFERENCE(expr.operand, ctx);
     switch (expr.op) {
     case Operator::Unwrap: {
-        tagged_union_must(operand, tagged_union, ctx);
+        tagged_union_must(operand, tagged_union_tag, ctx);
         return unwrap_tagged_union(expr.node, operand, ctx);
     } break;
     default:

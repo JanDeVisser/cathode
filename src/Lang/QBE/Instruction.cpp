@@ -121,6 +121,12 @@ std::wostream &operator<<(std::wostream &os, CastDef const &impl)
     return os;
 }
 
+std::wostream &operator<<(std::wostream &os, CommentDef const &impl)
+{
+    os << "    # " << impl.text;
+    return os;
+}
+
 std::wostream &operator<<(std::wostream &os, CopyDef const &impl)
 {
     os << "    " << impl.target << " = " << targettype(impl.target.type) << " copy " << impl.expr;

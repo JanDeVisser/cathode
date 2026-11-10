@@ -479,6 +479,12 @@ struct CastDef {
     friend std::wostream &operator<<(std::wostream &os, CastDef const &impl);
 };
 
+struct CommentDef {
+    std::wstring text;
+
+    friend std::wostream &operator<<(std::wostream &os, CommentDef const &impl);
+};
+
 struct CopyDef {
     ILValue expr;
     ILValue target;
@@ -621,6 +627,7 @@ using ILInstructionImpl = std::variant<
     BlitDef,
     CallDef,
     CastDef,
+    CommentDef,
     CopyDef,
     DbgFile,
     DbgLoc,
@@ -1084,7 +1091,9 @@ struct QBEUnaryExpr {
 
 using GenResult = QBEOperand::GenResult;
 
-void                                   check_tagged_union(int64_t required, QBEOperand const &val, TaggedUnionType const &tagged_union, QBELabel const &value_not_ok, QBELabel const &value_ok, QBEContext &ctx);
+void                                   qbe_abort(std::wstring_view const &message, QBEContext &ctx);
+void                                   check_tagged_union(QBEOperand const &val, TaggedUnionType const &tagged_union, int64_t value, QBELabel const &value_not_ok, QBELabel const &value_ok, QBEContext &ctx);
+GenResult                              unwrap_tagged_union(ASTNode const &unwrapped, QBEOperand const &result, QBEContext &ctx);
 GenResult                              qbe_operator(QBEBinExpr const &expr, QBEContext &ctx);
 GenResult                              qbe_operator(QBEUnaryExpr const &expr, QBEContext &ctx);
 GenResult                              generate_qbe_node(ASTNode const &n, QBEContext &ctx);

@@ -191,7 +191,7 @@ ASTNode Extern::normalized(ASTNode const &n) const
 BindResult Extern::bind(ASTNode const &) const
 {
     for (auto const &func : declarations) {
-        try_bind(func);
+        TRY_BIND(func);
     }
     return TypeRegistry::void_;
 }

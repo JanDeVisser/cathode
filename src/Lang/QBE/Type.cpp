@@ -236,6 +236,11 @@ void flatten_type(TaggedUnionType const &tagged_union, ILLayout &layout)
     flatten_type(tagged_union.tag_type, layout);
 }
 
+void flatten_type(TaggedUnionTag const &tag_type, ILLayout &layout)
+{
+    flatten_type(tag_type.underlying(), layout);
+}
+
 void flatten_type(FloatType const &flt_type, ILLayout &layout)
 {
     layout.emplace_back(qbe_type_code(flt_type));
@@ -366,8 +371,8 @@ ILType qbe_type(pType const &type)
             [](ZeroTerminatedArray const &) -> ILType {
                 return ILBaseType::L;
             },
-            [](EnumType const &enum_type) -> ILType {
-                return qbe_type(enum_type.underlying_type);
+            [](enumerated_type auto const &enum_type) -> ILType {
+                return qbe_type(enum_type.underlying());
             },
             [&type](auto const &) -> ILType {
                 return ILType { type };

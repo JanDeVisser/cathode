@@ -1,7 +1,10 @@
-#include "Lang/QBE/QBE.h"
+#include <Util/Enumerate.h>
+
 #include <Lang/QBE/Generate/Generate.h>
 
-#include <Util/Enumerate.h>
+#include "Lang/QBE/QBE.h"
+#include "Util/StringUtil.h"
+#include "Util/Utf8.h"
 
 namespace Lang::QBE {
 
@@ -345,7 +348,7 @@ GenResult assign(QBEOperand const &lhs, ASTNode const &rhs, QBEContext &ctx)
                     });
             },
             [&ctx, &lhs, &rhs_value](auto const &lhs_descr, auto const &rhs_descr) {
-                trace(Eval, L"generic assign({}, {})", demangle<decltype(lhs_descr)>(), demangle<decltype(rhs_descr)>());
+                trace(QBE, L"generic assign({}, {})", demangle<decltype(lhs_descr)>(), demangle<decltype(rhs_descr)>());
                 raw_assign(lhs.get_value(), rhs_value.get_value(), lhs.ptype, ctx);
             } },
         lhs.ptype->description, rhs->bound_type->description);
@@ -456,7 +459,8 @@ GenResult generate_qbe_node(ASTNode const &n, QBEContext &ctx)
     if (ctx.current_file < ctx.program.files.size()) {
         auto &file { ctx.program.files[ctx.current_file] };
         if (ctx.current_function < file.functions.size() && !is<Dummy>(n)) {
-            ctx += LabelDef { LabelType::Begin, n },
+            ctx += CommentDef { std::format(L"Start {} {}", *n.id, as_wstring(to_string(n, true))) },
+                LabelDef { LabelType::Begin, n },
                 DbgLoc { n->location.line, n->location.column, as_wstring(SyntaxNodeType_name(n->type())) };
         }
     }
@@ -468,7 +472,8 @@ GenResult generate_qbe_node(ASTNode const &n, QBEContext &ctx)
     if (ctx.current_file < ctx.program.files.size()) {
         auto &file { ctx.program.files[ctx.current_file] };
         if (ctx.current_function < file.functions.size() && !is<Dummy>(n)) {
-            ctx += LabelDef { LabelType::End, n };
+            ctx += LabelDef { LabelType::End, n },
+                CommentDef { std::format(L"End {} {}", *n.id, as_wstring(to_string(n, true))) };
         }
     }
     ctx.current_node.pop_back();

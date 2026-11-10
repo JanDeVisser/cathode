@@ -5,6 +5,7 @@
  */
 
 #include <iostream>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -210,6 +211,19 @@ void dump(ASTNode const &, SwitchStatement const &impl, std::ostream &os, int in
 }
 
 template<>
+void dump(ASTNode const &, TagOf const &impl, std::ostream &os, int indent)
+{
+    dump(impl.operand, os, indent + 4);
+    dump(impl.alternative, os, indent + 4);
+}
+
+template<>
+void dump(ASTNode const &, TagPayload const &impl, std::ostream &os, int indent)
+{
+    dump(impl.payload, os, indent + 4);
+}
+
+template<>
 void dump(ASTNode const &, UnaryExpression const &impl, std::ostream &os, int indent)
 {
     dump(impl.operand, os, indent + 4);
@@ -231,7 +245,7 @@ void dump(ASTNode const &, WhileStatement const &impl, std::ostream &os, int ind
 /* ======================================================================== */
 
 template<class N>
-std::string to_string(ASTNode const &, N const &)
+std::string to_string(ASTNode const &, N const &, bool)
 {
     return "";
 }
@@ -239,31 +253,37 @@ std::string to_string(ASTNode const &, N const &)
 template<class Expr>
     requires std::is_same_v<Expr, BinaryExpression>
     || std::is_same_v<Expr, UnaryExpression>
-std::string to_string(ASTNode const &, Expr const &impl)
+std::string to_string(ASTNode const &, Expr const &impl, bool)
 {
     return Operator_name(impl.op);
 }
 
 template<>
-std::string to_string(ASTNode const &, Alias const &impl)
+std::string to_string(ASTNode const &, Abort const &impl, bool)
 {
-    return std::format("{} = {}", as_utf8(impl.name), to_string(impl.aliased_type));
+    return as_utf8(impl.message);
 }
 
 template<>
-std::string to_string(ASTNode const &, BoolConstant const &impl)
+std::string to_string(ASTNode const &, Alias const &impl, bool plain)
+{
+    return std::format("{} = {}", as_utf8(impl.name), to_string(impl.aliased_type, plain));
+}
+
+template<>
+std::string to_string(ASTNode const &, BoolConstant const &impl, bool)
 {
     return (impl.value) ? "True" : "False";
 }
 
 template<>
-std::string to_string(ASTNode const &, Call const &impl)
+std::string to_string(ASTNode const &, Call const &impl, bool plain)
 {
-    return to_string(impl.callable);
+    return to_string(impl.callable, plain);
 }
 
 template<>
-std::string to_string(ASTNode const &, Decimal const &impl)
+std::string to_string(ASTNode const &, Decimal const &impl, bool)
 {
     std::stringstream os;
     os << impl.value;
@@ -271,7 +291,7 @@ std::string to_string(ASTNode const &, Decimal const &impl)
 }
 
 template<>
-std::string to_string(ASTNode const &, Number const &impl)
+std::string to_string(ASTNode const &, Number const &impl, bool)
 {
     std::stringstream os;
     std::visit(
@@ -286,64 +306,64 @@ std::string to_string(ASTNode const &, Number const &impl)
 template<class N>
     requires std::is_same_v<N, Embed>
     || std::is_same_v<N, Include>
-std::string to_string(ASTNode const &, N const &impl)
+std::string to_string(ASTNode const &, N const &impl, bool)
 {
     return as_utf8(impl.file_name);
 }
 
 template<>
-std::string to_string(ASTNode const &, Import const &impl)
+std::string to_string(ASTNode const &, Import const &impl, bool)
 {
     return as_utf8(join(impl.file_name, L"."sv));
 }
 
 template<>
-std::string to_string(ASTNode const &, Enum const &impl)
+std::string to_string(ASTNode const &, Enum const &impl, bool plain)
 {
     std::stringstream os;
     os << as_utf8(impl.name);
     if (impl.underlying_type != nullptr) {
-        os << ": " << to_string(impl.underlying_type);
+        os << ": " << to_string(impl.underlying_type, plain);
     }
     return os.str();
 }
 
 template<>
-std::string to_string(ASTNode const &, EnumValue const &impl)
+std::string to_string(ASTNode const &, EnumValue const &impl, bool plain)
 {
     std::string ret = as_utf8(impl.label);
     if (impl.value != nullptr) {
         ret += " = "sv;
-        ret += to_string(impl.value);
+        ret += to_string(impl.value, plain);
     }
     if (impl.payload != nullptr) {
         ret += " ("sv;
-        ret += to_string(impl.payload);
+        ret += to_string(impl.payload, plain);
         ret += ")"sv;
     }
     return ret;
 }
 
 template<>
-std::string to_string(ASTNode const &, Extern const &impl)
+std::string to_string(ASTNode const &, Extern const &impl, bool)
 {
     return std::format("{} function in library `{}`", impl.declarations.size(), as_utf8(impl.library));
 }
 
 template<>
-std::string to_string(ASTNode const &, ExternLink const &impl)
+std::string to_string(ASTNode const &, ExternLink const &impl, bool)
 {
     return as_utf8(impl.link_name);
 }
 
 template<>
-std::string to_string(ASTNode const &, ForStatement const &impl)
+std::string to_string(ASTNode const &, ForStatement const &impl, bool)
 {
     return as_utf8(impl.range_variable);
 }
 
 template<>
-std::string to_string(ASTNode const &, FunctionDeclaration const &impl)
+std::string to_string(ASTNode const &, FunctionDeclaration const &impl, bool plain)
 {
     std::stringstream os;
     os << as_utf8(impl.name);
@@ -355,12 +375,12 @@ std::string to_string(ASTNode const &, FunctionDeclaration const &impl)
         }
         os << '>';
     }
-    os << ": " << to_string(impl.return_type);
+    os << ": " << to_string(impl.return_type, plain);
     return os.str();
 }
 
 template<>
-std::string to_string(ASTNode const &, FunctionDefinition const &impl)
+std::string to_string(ASTNode const &, FunctionDefinition const &impl, bool)
 {
     return as_utf8(impl.name);
 }
@@ -372,7 +392,7 @@ template<class N>
     || std::is_same_v<N, SwitchStatement>
     || std::is_same_v<N, WhileStatement>
     || std::is_same_v<N, Yield>
-std::string to_string(ASTNode const &, N const &impl)
+std::string to_string(ASTNode const &, N const &impl, bool)
 {
     if (impl.label) {
         return as_utf8(*impl.label);
@@ -382,61 +402,61 @@ std::string to_string(ASTNode const &, N const &impl)
 
 template<class N>
     requires std::is_same_v<N, Identifier> || std::is_same_v<N, StampedIdentifier>
-std::string to_string(ASTNode const &, N const &impl)
+std::string to_string(ASTNode const &, N const &impl, bool)
 {
     return as_utf8(impl.identifier);
 }
 
 template<>
-std::string to_string(ASTNode const &, IdentifierList const &impl)
+std::string to_string(ASTNode const &, IdentifierList const &impl, bool)
 {
     return as_utf8(join(impl.identifiers, L"."sv));
 }
 
 template<>
-std::string to_string(ASTNode const &, Module const &impl)
+std::string to_string(ASTNode const &, Module const &impl, bool)
 {
     return as_utf8(impl.name);
 }
 
 template<>
-std::string to_string(ASTNode const &, Parameter const &impl)
+std::string to_string(ASTNode const &, Parameter const &impl, bool plain)
 {
-    return std::format("{}: {}", as_utf8(impl.name), to_string(impl.type_name));
+    return std::format("{}: {}", as_utf8(impl.name), to_string(impl.type_name, plain));
 }
 
 template<>
-std::string to_string(ASTNode const &, QuotedString const &impl)
+std::string to_string(ASTNode const &, QuotedString const &impl, bool)
 {
     return as_utf8(impl.string);
 }
 
 template<>
-std::string to_string(ASTNode const &, CString const &impl)
+std::string to_string(ASTNode const &, CString const &impl, bool)
 {
     return impl.string;
 }
 
 template<>
-std::string to_string(ASTNode const &, String const &impl)
+std::string to_string(ASTNode const &, String const &impl, bool)
 {
     return as_utf8(impl.string);
 }
 
 template<>
-std::string to_string(ASTNode const &, Struct const &impl)
+std::string to_string(ASTNode const &, Struct const &impl, bool)
 {
     return as_utf8(impl.name);
 }
 
 template<>
-std::string to_string(ASTNode const &, StructMember const &impl)
+std::string to_string(ASTNode const &, StructMember const &impl, bool plain)
 {
-    return std::format("{} {}", as_utf8(impl.label), to_string(impl.member_type));
+    return std::format("{} {}", as_utf8(impl.label), to_string(impl.member_type, plain));
 }
 
 template<TagReference TagRef>
-std::string to_string(ASTNode const &n, TagRef const &impl)
+std::string to_string(ASTNode const &n, TagRef const &impl, bool)
 {
     std::stringstream ss {};
     ss << impl.tag_value;
@@ -454,14 +474,24 @@ std::string to_string(ASTNode const &n, TagRef const &impl)
     return ss.str();
 }
 
+std::string to_string(ASTNode const &, TagOf const &impl, bool)
+{
+    std::stringstream ss {};
+    ss << impl.tag_value;
+    return ss.str();
+}
+
 template<>
-std::string to_string(ASTNode const &n, TagPayload const &impl)
+std::string to_string(ASTNode const &n, TagPayload const &impl, bool)
 {
     std::stringstream ss {};
     ss << impl.tag_value;
     if (n->bound_type) {
         std::visit(
             overloads {
+                [&ss](TaggedUnionTag const &tag_type) -> void {
+                    ss << "=" << as_utf8(tag_type.label_for().value_or(L"??"));
+                },
                 [&ss, &impl](enumerated_type auto const &enoom) -> void {
                     ss << "=" << as_utf8(enoom.label_for(impl.tag_value).value_or(L"??"));
                 },
@@ -474,43 +504,43 @@ std::string to_string(ASTNode const &n, TagPayload const &impl)
 }
 
 template<>
-std::string to_string(ASTNode const &, TypeSpecification const &impl)
+std::string to_string(ASTNode const &, TypeSpecification const &impl, bool plain)
 {
     return std::visit(
         overloads {
             [](TypeNameNode const &d) -> std::string {
                 return std::format("<{}>", as_utf8(join(d.name, std::wstring_view { L"," })));
             },
-            [](ReferenceDescriptionNode const &d) -> std::string {
-                return std::format("&{}", to_string(d.referencing));
+            [plain](ReferenceDescriptionNode const &d) -> std::string {
+                return std::format("&{}", to_string(d.referencing, plain));
             },
-            [](SliceDescriptionNode const &d) -> std::string {
-                return std::format("[]{}", to_string(d.slice_of));
+            [plain](SliceDescriptionNode const &d) -> std::string {
+                return std::format("[]{}", to_string(d.slice_of, plain));
             },
-            [](ZeroTerminatedArrayDescriptionNode const &d) -> std::string {
-                return std::format("[0]{}", to_string(d.array_of));
+            [plain](ZeroTerminatedArrayDescriptionNode const &d) -> std::string {
+                return std::format("[0]{}", to_string(d.array_of, plain));
             },
-            [](ArrayDescriptionNode const &d) -> std::string {
-                return std::format("[{}]{}", d.size, to_string(d.array_of));
+            [plain](ArrayDescriptionNode const &d) -> std::string {
+                return std::format("[{}]{}", d.size, to_string(d.array_of, plain));
             },
-            [](DynArrayDescriptionNode const &d) -> std::string {
-                return std::format("[*]{}", to_string(d.array_of));
+            [plain](DynArrayDescriptionNode const &d) -> std::string {
+                return std::format("[*]{}", to_string(d.array_of, plain));
             },
-            [](OptionalDescriptionNode const &d) -> std::string {
-                return std::format("{}?", to_string(d.optional_of));
+            [plain](OptionalDescriptionNode const &d) -> std::string {
+                return std::format("{}?", to_string(d.optional_of, plain));
             },
-            [](PointerDescriptionNode const &d) -> std::string {
-                return std::format("{}*", to_string(d.referencing));
+            [plain](PointerDescriptionNode const &d) -> std::string {
+                return std::format("{}*", to_string(d.referencing, plain));
             },
-            [](ResultDescriptionNode const &d) -> std::string {
-                return std::format("{}/{}", to_string(d.success), to_string(d.error));
+            [plain](ResultDescriptionNode const &d) -> std::string {
+                return std::format("{}/{}", to_string(d.success, plain), to_string(d.error, plain));
             },
         },
         impl.description);
 }
 
 template<>
-std::string to_string(ASTNode const &, VariableDeclaration const &impl)
+std::string to_string(ASTNode const &, VariableDeclaration const &impl, bool plain)
 {
     std::stringstream os;
     if (impl.is_const) {
@@ -518,44 +548,49 @@ std::string to_string(ASTNode const &, VariableDeclaration const &impl)
     }
     os << as_utf8(impl.name);
     if (impl.type_name != nullptr) {
-        os << ": " << to_string(impl.type_name);
+        os << ": " << to_string(impl.type_name, plain);
     }
     return os.str();
 }
 
 /* ======================================================================== */
 
-std::string to_string(ASTNode const &node)
+std::string to_string(ASTNode const &node, bool plain)
 {
     if (node == nullptr) {
         return "[null]";
     }
     std::stringstream os;
     std::string       color {};
-    switch (node->status) {
-    case ASTStatus::Initialized:
-    case ASTStatus::Normalized:
-        break;
-    case ASTStatus::Bound:
-        color = "\x1b[92m";
-        break;
-    case ASTStatus::Undetermined:
-        color = "\x1b[93m";
-        break;
-    case ASTStatus::Ambiguous:
-    case ASTStatus::BindErrors:
-    case ASTStatus::InternalError:
-        color = "\x1b[91m";
-        break;
+    std::string       color_reset {};
+    if (!plain) {
+        switch (node->status) {
+        case ASTStatus::Initialized:
+        case ASTStatus::Normalized:
+            break;
+        case ASTStatus::Bound:
+            color = "\x1b[92m";
+            color_reset = "\x1b[m";
+            break;
+        case ASTStatus::Undetermined:
+            color = "\x1b[93m";
+            color_reset = "\x1b[m";
+            break;
+        case ASTStatus::Ambiguous:
+        case ASTStatus::BindErrors:
+        case ASTStatus::InternalError:
+            color = "\x1b[91m";
+            break;
+        }
+        if (!color.empty()) {
+            color_reset = "\x1b[m";
+        }
     }
-    os << color << SyntaxNodeType_name(node->type());
-    if (!color.empty()) {
-        os << "\x1b[m";
-    }
+    os << color << SyntaxNodeType_name(node->type()) << color_reset;
     os << ' ';
     std::visit(
-        [&node, &os](auto const &impl) {
-            os << to_string(node, impl);
+        [&node, &os, plain](auto const &impl) {
+            os << to_string(node, impl, plain);
         },
         node->node);
     if (node->bound_type != nullptr) {
@@ -569,13 +604,13 @@ std::string to_string(ASTNode const &node)
     case ASTStatus::Undetermined:
         break;
     case ASTStatus::Ambiguous:
-        os << "Ambiguous";
+        os << color << "Ambiguous" << color_reset;
         break;
     case ASTStatus::BindErrors:
-        os << "BindErrors";
+        os << color << "BindErrors" << color_reset;
         break;
     case ASTStatus::InternalError:
-        os << "InternalError";
+        os << color << "InternalError" << color_reset;
         break;
     }
     return os.str();
@@ -599,7 +634,7 @@ void dump(ASTNode const &node, std::ostream &os, int indent)
     print_indent(os, indent);
     header(node, os);
     os << std::endl;
-    if (get_option("dump-namespaces") && node->ns && !node->ns->entries.empty()) {
+    if (get_option("dump-namespaces") && node->ns) {
         print_indent(os, indent + 4);
         os << "Namespace "
            << node->ns.id.value();
@@ -610,19 +645,37 @@ void dump(ASTNode const &node, std::ostream &os, int indent)
         for (auto const &entry : node->ns->entries) {
             print_indent(os, indent + 8);
             auto const name { as_utf8(entry.first) };
-            os << name << ": ";
+            os << name;
             auto const e { entry.second };
             if (e.variable != nullptr) {
-                os << name << ": " << as_utf8(e.variable->bound_type->to_string()) << '\n';
+                if (e.variable->bound_type != nullptr) {
+                    os << ": " << as_utf8(e.variable->bound_type->name);
+                }
             }
             if (e.module != nullptr) {
-                os << name << ": " << as_utf8(e.module->bound_type->to_string()) << '\n';
+                if (e.module->bound_type != nullptr) {
+                    os << as_utf8(e.module->bound_type->name);
+                }
             }
             if (e.type != nullptr) {
-                os << name << ": " << as_utf8(e.type->to_string()) << '\n';
+                os << ": " << as_utf8(e.type->to_string());
             }
-            for (auto const &f : e.functions) {
-                os << name << ": " << as_utf8(f->bound_type->to_string()) << '\n';
+            if (!e.functions.empty()) {
+                if (e.functions.size() == 1) {
+                    if (auto const &f = e.functions.front(); f->bound_type != nullptr) {
+                        os << ": " << as_utf8(f->bound_type->name) << '\n';
+                    }
+                } else {
+                    os << '\n';
+                    for (auto const &f : e.functions | std::ranges::views::filter([](auto const &f) -> bool {
+                             return f->bound_type != nullptr;
+                         })) {
+                        print_indent(os, indent + 12);
+                        os << "  - " << as_utf8(f->bound_type->name) << '\n';
+                    }
+                }
+            } else {
+                os << '\n';
             }
         }
     }

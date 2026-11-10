@@ -27,6 +27,8 @@ GenResult generate_qbe_node(ASTNode const &, Node const &impl, QBEContext &)
 }
 
 template<>
+GenResult generate_qbe_node(ASTNode const &n, Abort const &, QBEContext &);
+template<>
 GenResult generate_qbe_node(ASTNode const &n, Alias const &, QBEContext &);
 template<>
 GenResult generate_qbe_node(ASTNode const &n, ArgumentList const &impl, QBEContext &ctx);

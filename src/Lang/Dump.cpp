@@ -588,11 +588,31 @@ std::string to_string(ASTNode const &node, bool plain)
     }
     os << color << SyntaxNodeType_name(node->type()) << color_reset;
     os << ' ';
-    std::visit(
-        [&node, &os, plain](auto const &impl) {
-            os << to_string(node, impl, plain);
+    auto s { std::visit(
+        [&node, plain](auto const &impl) -> std::string {
+            return to_string(node, impl, plain);
         },
-        node->node);
+        node->node) };
+    for (size_t ix = 0; ix < s.length(); ++ix) {
+        std::string_view repl {};
+        switch (s[ix]) {
+        case '\n':
+            repl = "\\n";
+            break;
+        case '\r':
+            repl = "\\r";
+            break;
+        case '\t':
+            repl = "\\t";
+            break;
+        default:
+            repl = "";
+        }
+        if (!repl.empty()) {
+            s.replace(ix, 1, repl);
+        }
+    }
+    os << s;
     if (node->bound_type != nullptr) {
         os << " -> " << as_utf8(node->bound_type->name);
     }

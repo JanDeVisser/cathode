@@ -1,10 +1,8 @@
 #include <Util/Enumerate.h>
+#include <Util/Utf8.h>
 
 #include <Lang/QBE/Generate/Generate.h>
-
-#include "Lang/QBE/QBE.h"
-#include "Util/StringUtil.h"
-#include "Util/Utf8.h"
+#include <Lang/QBE/QBE.h>
 
 namespace Lang::QBE {
 

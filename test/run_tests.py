@@ -11,6 +11,8 @@ import shutil
 import subprocess
 import sys
 
+BUILD_DIR = "../build"
+CATHODE = f"{BUILD_DIR}/bin/cathode"
 
 def check_stream(script, what, stream):
     ret = []
@@ -30,7 +32,7 @@ def check_stream(script, what, stream):
     return ret
 
 
-def test_compile(name, script):
+def test_compile(name, script, compiler_output):
     try:
         os.remove(name)
         os.remove("stdout")
@@ -41,9 +43,10 @@ def test_compile(name, script):
     with open("stdout", "w+") as out, open("stderr", "w+") as err:
         # cmdline = [os.path.join(".compiled", name)]
         cmdline = [
-            "../build/bin/cathode",
+            CATHODE,
             "--verbose",
-            "--list",
+            "--dump-trees",
+            "--dump-namespaces",
             "--keep-assembly",
             "compile",
             name + ".cth",
@@ -61,13 +64,15 @@ def test_compile(name, script):
             print("\033[32m[  OK  ]\033[0m ", end="")
         else:
             print("\033[31m[FAILED]\033[0m \033[93m[  XX  ] [  XX  ]\033[0m")
-            with open("stdout", "r") as out, open("stderr", "r") as err:
-                print(out.read(), end="")
-                print(err.read(), end="")
+            if compiler_output:
+                with open("stdout", "r") as out, open("stderr", "r") as err:
+                    print(out.read(), end="")
+                    print(err.read(), end="")
             return False
     else:
         print("\033[31m[FAILED]\033[0m \033[93m[  XX  ] [  XX  ]\033[0m")
-        print(error)
+        if compiler_output:
+            print(error)
         return False
 
     os.remove("stdout")
@@ -102,7 +107,7 @@ def test_compile(name, script):
 def test_eval(name, script):
     with open("stdout", "w+") as out, open("stderr", "w+") as err:
         # cmdline = [os.path.join(".compiled", name)]
-        cmdline = ["../build/bin/cathode", "eval", f"{name}.cth"]
+        cmdline = [CATHODE, "eval", f"{name}.cth"]
         cmdline.extend(script["args"])
         ex = subprocess.call(cmdline, stdout=out, stderr=err)
         out.seek(0)
@@ -131,9 +136,8 @@ def test_eval(name, script):
     return len(error) == 0
 
 
-def test_script(name):
-    if name.endswith(".cth"):
-        name = name[:-4]
+def test_script(name, compiler_output=False):
+    name = name.removesuffix(".cth")
 
     with open(name + ".json") as fd:
         script = json.load(fd)
@@ -141,7 +145,7 @@ def test_script(name):
     print(f"{name:<25}", end="")
     ok = True
     if "no-compile" not in script:
-        ok = test_compile(name, script)
+        ok = test_compile(name, script, compiler_output)
     else:
         print("\033[93m[  XX  ] [  XX  ]\033[0m ", end="")
     if ok:
@@ -156,8 +160,14 @@ def run_tests(names, break_on_failure):
     print("                         Comptime Compiled   Eval")
     print("===================================================")
     for n in names:
-        if not test_script(n) and break_on_failure:
+        if not test_script(n, False) and break_on_failure:
             break
+
+
+def run_one_test(name):
+    print("                         Comptime Compiled   Eval")
+    print("===================================================")
+    test_script(name, True)
 
 
 def load_test_names():
@@ -174,8 +184,8 @@ def run_all_tests(break_on_failure):
 
 
 def config_test(name, *args):
-    if name.endswith(".cth"):
-        name = name[:-4]
+    name = name.removesuffix(".cth")
+
     # name = compile_script(name)
     if name is None:
         sys.exit(1)
@@ -249,14 +259,34 @@ def config_tests(tests):
     with open(tests) as fd:
         # FIXME Why does this map() not work?
         # map(config_test, [stripped for stripped in [name.strip() for name in fd] if not stripped.startswith("#")])
-        for tests in [
+        for test_name in [
             stripped
             for stripped in [test.strip() for test in fd]
             if not stripped.startswith("#")
         ]:
-            name_args = filter(None, tests.split(" "))
+            name_args = filter(None, test_name.split(" "))
             config_test(*name_args)
 
+def build_compiler():
+    with open("stdout", "w+") as out, open("stderr", "w+") as err:
+        # cmdline = [os.path.join(".compiled", name)]
+        cmdline = [
+            "cmake",
+            "--build",
+            BUILD_DIR,
+            "--target",
+            "install",
+        ]
+        ex = subprocess.call(cmdline, stdout=out, stderr=err)
+        out.seek(0)
+        err.seek(0)
+    if ex == 0:
+        run_one_test("01_helloworld")
+    else:
+        print("Compilation failed!\n")
+        with open("stdout", "r") as err:
+            for line in err:
+                print(line, end="")
 
 def initialize():
     shutil.rmtree(".compiled", True)
@@ -280,6 +310,11 @@ index_tests = subparsers.add_parser(
     help="Displays an index of all registered tests. Output can be used by run_tests add-all",
 )
 
+make_all = subparsers.add_parser(
+    "make",
+    help="Builds the cathode compiler",
+)
+
 run_all = subparsers.add_parser(
     "all",
     help="Execute all tests in the registry",
@@ -290,6 +325,17 @@ run_all.add_argument(
     "--break-on-failure",
     action="store_true",
     help="Break on test failure",
+)
+
+run_one = subparsers.add_parser(
+    "one",
+    help="Execute one single test, dumping compiler output on failure",
+)
+
+run_one.add_argument(
+    "test",
+    nargs=1,
+    help="Test to run",
 )
 
 run_some = subparsers.add_parser(
@@ -368,6 +414,10 @@ args = arg_parser.parse_args()
 
 if args.cmd == "all":
     run_all_tests(args.break_on_failure)
+if args.cmd == "make":
+    build_compiler()
+if args.cmd == "one":
+    run_one_test(args.test[0])
 if args.cmd == "some":
     run_tests(args.test, args.break_on_failure)
 if args.cmd == "create":

@@ -81,8 +81,8 @@ void qbe_abort(std::wstring_view const &message, QBEContext &ctx)
 static void check_division_by_zero(QBEOperand const &rhs, QBEContext &ctx)
 {
     auto cmp_zero { ILValue::local(++ctx.next_var, ILBaseType::W) };
-    ctx += ExprDef { ILValue::integer(0, rhs.get_value().type), rhs.get_value(), ILOperation::NotEqual, cmp_zero };
-    qbe_abort(division_by_zero, ctx);
+    ctx += ExprDef { ILValue::integer(0, rhs.get_value().type), rhs.get_value(), ILOperation::NotEqual, cmp_zero },
+        CallDef { L"libcathodert:cathode$assert", ILValue::null(), { cmp_zero, ctx.add_string(division_by_zero), ILValue::integer(wcslen(division_by_zero), ILBaseType::L) } };
 }
 
 static void check_optional(QBEOperand const &val, OptionalType const &optional, QBELabel const &value_unset, QBELabel const &value_set, QBEContext &ctx)

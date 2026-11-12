@@ -80,21 +80,21 @@ GenResult generate_qbe_node(ASTNode const &n, TagOf const &impl, QBEContext &ctx
     QBELabel    done = { LabelType::Bottom, n };
     auto        ret = ILValue::local(++ctx.next_var, qbe_type(payload));
     auto        deref = TRY_DEREFERENCE(operand, ctx);
-    check_tagged_union(deref, get<TaggedUnionType>(impl.tagged_union), impl.tag_value, use_alternative, use_value, ctx);
-    ctx += LabelDef { use_alternative };
-    QBEOperand alternative { TRY_GENERATE(impl.alternative, ctx) };
-    if (!is<NoReturnType>(impl.alternative->bound_type)) {
-        ctx += CopyDef { alternative.get_value(), ret };
-    }
-    ctx += JmpDef { done },
-        LabelDef { use_value };
-
-    auto reference = QBEOperand {
+    auto        reference = QBEOperand {
         n,
         TypeRegistry::the().referencing(payload),
         deref.get_value(),
     };
+    check_tagged_union(deref, get<TaggedUnionType>(impl.tagged_union), impl.tag_value, use_alternative, use_value, ctx);
+    ctx += LabelDef { use_value };
     auto retval = TRY_DEREFERENCE(reference, ctx);
+    ctx += JmpDef { done };
+    ctx += LabelDef { use_alternative };
+    QBEOperand alternative { TRY_GENERATE(impl.alternative, ctx) };
+    alternative = TRY_DEREFERENCE(alternative, ctx);
+    if (!is<NoReturnType>(impl.alternative->bound_type)) {
+        ctx += CopyDef { alternative.get_value(), retval.get_value() };
+    }
     ctx += LabelDef { done };
     return retval;
 }

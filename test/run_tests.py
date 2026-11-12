@@ -14,6 +14,17 @@ import sys
 BUILD_DIR = "../build"
 CATHODE = f"{BUILD_DIR}/bin/cathode"
 
+def print_file(filename, banner):
+    if os.access(filename, os.R_OK or os.X_OK):
+        print(f"{banner}:")
+        print("======================================")
+        with open(filename, "r") as fd:
+            lines = [line for line in fd]
+            for num, line in zip(range(len(lines)), lines):
+                print(f"{num:3} | {line}", end="")
+        print("======================================")
+
+
 def check_stream(script, what, stream):
     ret = []
     written = [line.strip() for line in stream]
@@ -37,8 +48,13 @@ def test_compile(name, script, compiler_output):
         os.remove(name)
         os.remove("stdout")
         os.remove("stderr")
+        os.remove(f".cathode/{name}.ssa")
+        os.remove(f".cathode/{name}.s")
+        os.remove(f".cathode/{name}.out")
     except FileNotFoundError:
         pass
+
+    output = []
 
     with open("stdout", "w+") as out, open("stderr", "w+") as err:
         # cmdline = [os.path.join(".compiled", name)]
@@ -46,10 +62,9 @@ def test_compile(name, script, compiler_output):
             CATHODE,
             "--verbose",
             "--dump-trees",
-            "--dump-namespaces",
             "--keep-assembly",
             "compile",
-            name + ".cth",
+            f"{name}.cth",
         ]
         ex = subprocess.call(cmdline, stdout=out, stderr=err)
         out.seek(0)
@@ -59,20 +74,25 @@ def test_compile(name, script, compiler_output):
         error.extend(check_stream(script, script["comptime_stdout"], out))
         error.extend(check_stream(script, script["comptime_stderr"], err))
 
+        out.seek(0)
+        err.seek(0)
+        output.extend([line for line in out])
+        output.extend([line for line in err])
+
     if len(error) == 0:
         if os.access(f"./{name}", os.R_OK or os.X_OK):
             print("\033[32m[  OK  ]\033[0m ", end="")
         else:
             print("\033[31m[FAILED]\033[0m \033[93m[  XX  ] [  XX  ]\033[0m")
             if compiler_output:
-                with open("stdout", "r") as out, open("stderr", "r") as err:
-                    print(out.read(), end="")
-                    print(err.read(), end="")
+                for line in output:
+                    print(line, end="")
             return False
     else:
         print("\033[31m[FAILED]\033[0m \033[93m[  XX  ] [  XX  ]\033[0m")
         if compiler_output:
-            print(error)
+            for line in output:
+                print(line, end="")
         return False
 
     os.remove("stdout")
@@ -93,14 +113,21 @@ def test_compile(name, script, compiler_output):
         error.extend(check_stream(script, script["stdout"], out))
         error.extend(check_stream(script, script["stderr"], err))
 
+        out.seek(0)
+        err.seek(0)
+        output.extend([line for line in out])
+        output.extend([line for line in err])
+
     os.remove("stdout")
     os.remove("stderr")
     if len(error) == 0:
         print("\033[32m[  OK  ]\033[0m ", end="")
     else:
         print("\033[31m[FAILED]\033[0m \033[93m[  XX  ]\033[0m")
-        print(error)
 
+    if compiler_output:
+        with open(f".cathode/{name}.out", "w+") as fd:
+            fd.writelines(output)
     return len(error) == 0
 
 
@@ -153,6 +180,11 @@ def test_script(name, compiler_output=False):
             ok = test_eval(name, script)
         else:
             print("\033[93m[  XX  ]\033[0m ", end="\r\n")
+    if compiler_output:
+        print_file(f"{name}.cth", f"Test program {name}.cth")
+        print_file(f".cathode/{name}.out", "Compiler output")
+        print_file(f".cathode/{name}.ssa", "QBE program")
+
     return ok
 
 
@@ -164,10 +196,10 @@ def run_tests(names, break_on_failure):
             break
 
 
-def run_one_test(name):
+def run_one_test(name, verbose=False):
     print("                         Comptime Compiled   Eval")
     print("===================================================")
-    test_script(name, True)
+    test_script(name, verbose)
 
 
 def load_test_names():
@@ -281,7 +313,7 @@ def build_compiler():
         out.seek(0)
         err.seek(0)
     if ex == 0:
-        run_one_test("01_helloworld")
+        run_one_test("01_helloworld", False)
     else:
         print("Compilation failed!\n")
         with open("stdout", "r") as err:
@@ -336,6 +368,13 @@ run_one.add_argument(
     "test",
     nargs=1,
     help="Test to run",
+)
+
+run_one.add_argument(
+    "-v",
+    "--verbose",
+    action="store_true",
+    help="Show compiler logging output",
 )
 
 run_some = subparsers.add_parser(
@@ -417,7 +456,7 @@ if args.cmd == "all":
 if args.cmd == "make":
     build_compiler()
 if args.cmd == "one":
-    run_one_test(args.test[0])
+    run_one_test(args.test[0], args.verbose)
 if args.cmd == "some":
     run_tests(args.test, args.break_on_failure)
 if args.cmd == "create":

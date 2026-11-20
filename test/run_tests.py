@@ -14,6 +14,13 @@ import sys
 BUILD_DIR = "../build"
 CATHODE = f"{BUILD_DIR}/bin/cathode"
 
+def remove_file(name):
+    try:
+        os.remove(name)
+    except FileNotFoundError:
+        pass
+
+
 def print_file(filename, banner):
     if os.access(filename, os.R_OK or os.X_OK):
         print(f"{banner}:")
@@ -23,6 +30,17 @@ def print_file(filename, banner):
             for num, line in zip(range(len(lines)), lines):
                 print(f"{num:3} | {line}", end="")
         print("======================================")
+
+
+def print_value(val: bool | None) -> str:
+    color, s = (
+        ("93", "  XX  ")
+        if val is None
+        else ("32", "  OK  ")
+        if val
+        else ("31", "FAILED")
+    )
+    return f"\033[{color}m[{s}]\033[0m"
 
 
 def check_stream(script, what, stream):
@@ -43,95 +61,86 @@ def check_stream(script, what, stream):
     return ret
 
 
-def test_compile(name, script, compiler_output):
-    try:
-        os.remove(name)
-        os.remove("stdout")
-        os.remove("stderr")
-        os.remove(f".cathode/{name}.ssa")
-        os.remove(f".cathode/{name}.s")
-        os.remove(f".cathode/{name}.out")
-    except FileNotFoundError:
-        pass
+def test_compile(name, script, compiler_output) -> tuple[bool | None, bool | None]:
+    remove_file(name)
+    remove_file("stdout")
+    remove_file("stderr")
+    remove_file(f".cathode/{name}.ssa")
+    remove_file(f".cathode/{name}.s")
+    remove_file(f".cathode/{name}.out")
 
     output = []
 
-    with open("stdout", "w+") as out, open("stderr", "w+") as err:
-        # cmdline = [os.path.join(".compiled", name)]
-        cmdline = [
-            CATHODE,
-            "--verbose",
-            "--dump-trees",
-            "--keep-assembly",
-            "compile",
-            f"{name}.cth",
-        ]
-        ex = subprocess.call(cmdline, stdout=out, stderr=err)
-        out.seek(0)
-        err.seek(0)
+    try:
+        with open("stdout", "w+") as out, open("stderr", "w+") as err:
+            cmdline = [
+                CATHODE,
+                "--verbose",
+                "--dump-trees",
+                "--keep-assembly",
+                "compile",
+                f"{name}.cth",
+            ]
+            ex = subprocess.call(cmdline, stdout=out, stderr=err)
+            out.seek(0)
+            err.seek(0)
 
-        error = []
-        error.extend(check_stream(script, script["comptime_stdout"], out))
-        error.extend(check_stream(script, script["comptime_stderr"], err))
+            error = []
+            error.extend(check_stream(script, script["comptime_stdout"], out))
+            error.extend(check_stream(script, script["comptime_stderr"], err))
+            output.extend(error)
 
-        out.seek(0)
-        err.seek(0)
-        output.extend([line for line in out])
-        output.extend([line for line in err])
+            out.seek(0)
+            err.seek(0)
+            output.extend([line for line in out])
+            output.extend([line for line in err])
 
-    if len(error) == 0:
-        if os.access(f"./{name}", os.R_OK or os.X_OK):
-            print("\033[32m[  OK  ]\033[0m ", end="")
+        if len(error) == 0:
+            if not os.access(f"./{name}", os.R_OK or os.X_OK):
+                return (False, None)
         else:
-            print("\033[31m[FAILED]\033[0m \033[93m[  XX  ] [  XX  ]\033[0m")
+            return (False, None)
+
+        os.remove("stdout")
+        os.remove("stderr")
+        with open("stdout", "w+") as out, open("stderr", "w+") as err:
+            # cmdline = [os.path.join(".compiled", name)]
+            cmdline = [f"./{name}"]
+            cmdline.extend(script["args"])
+            ex = subprocess.call(cmdline, stdout=out, stderr=err)
+            out.seek(0)
+            err.seek(0)
+
+            error = []
+            if "exit" in script:
+                expected = script["exit"]
+                if ex != expected and ex != expected + 256 and ex != expected - 256:
+                    error.append(f"{name}: Exit code {ex}, expected {script['exit']}")
+            error.extend(check_stream(script, script["stdout"], out))
+            error.extend(check_stream(script, script["stderr"], err))
+            output.extend(error)
+
             if compiler_output:
-                for line in output:
-                    print(line, end="")
-            return False
-    else:
-        print("\033[31m[FAILED]\033[0m \033[93m[  XX  ] [  XX  ]\033[0m")
+                out.seek(0)
+                err.seek(0)
+                output.extend([line for line in out])
+                output.extend([line for line in err])
+
+        os.remove("stdout")
+        os.remove("stderr")
+        if len(error) == 0:
+            result = (True, True)
+        else:
+            result = (True, False)
+
+    finally:
         if compiler_output:
-            for line in output:
-                print(line, end="")
-        return False
-
-    os.remove("stdout")
-    os.remove("stderr")
-    with open("stdout", "w+") as out, open("stderr", "w+") as err:
-        # cmdline = [os.path.join(".compiled", name)]
-        cmdline = [f"./{name}"]
-        cmdline.extend(script["args"])
-        ex = subprocess.call(cmdline, stdout=out, stderr=err)
-        out.seek(0)
-        err.seek(0)
-
-        error = []
-        if "exit" in script:
-            expected = script["exit"]
-            if ex != expected and ex != expected + 256 and ex != expected - 256:
-                error.append(f"{name}: Exit code {ex}, expected {script['exit']}")
-        error.extend(check_stream(script, script["stdout"], out))
-        error.extend(check_stream(script, script["stderr"], err))
-
-        out.seek(0)
-        err.seek(0)
-        output.extend([line for line in out])
-        output.extend([line for line in err])
-
-    os.remove("stdout")
-    os.remove("stderr")
-    if len(error) == 0:
-        print("\033[32m[  OK  ]\033[0m ", end="")
-    else:
-        print("\033[31m[FAILED]\033[0m \033[93m[  XX  ]\033[0m")
-
-    if compiler_output:
-        with open(f".cathode/{name}.out", "w+") as fd:
-            fd.writelines(output)
-    return len(error) == 0
+            with open(f".cathode/{name}.out", "w+") as fd:
+                fd.writelines(output)
+    return result
 
 
-def test_eval(name, script):
+def test_eval(name, script) -> bool:
     with open("stdout", "w+") as out, open("stderr", "w+") as err:
         # cmdline = [os.path.join(".compiled", name)]
         cmdline = [CATHODE, "eval", f"{name}.cth"]
@@ -154,52 +163,54 @@ def test_eval(name, script):
 
     os.remove("stdout")
     os.remove("stderr")
-    if len(error) == 0:
-        print("\033[32m[  OK  ]\033[0m ", end="\r\n")
-    else:
-        print("\033[31m[FAILED]\033[0m ", end="\r\n")
-        print(error)
+    if len(error) != 0:
+        with open(f".cathode/{name}.out", "w+") as fd:
+            fd.writelines(error)
 
     return len(error) == 0
 
 
-def test_script(name, compiler_output=False):
+def test_script(
+    name: str, compiler_output: bool, suppress_ok: bool
+) -> tuple[None | bool, None | bool, None | bool]:
     name = name.removesuffix(".cth")
 
     with open(name + ".json") as fd:
         script = json.load(fd)
 
-    print(f"{name:<25}", end="")
-    ok = True
+    result: tuple[None | bool, None | bool, None | bool]
     if "no-compile" not in script:
-        ok = test_compile(name, script, compiler_output)
+        res = test_compile(name, script, compiler_output)
+        eval = None
+        if res[1] and "no-eval" not in script:
+            eval = test_eval(name, script)
+        result = (res[0], res[1], eval)
     else:
-        print("\033[93m[  XX  ] [  XX  ]\033[0m ", end="")
-    if ok:
-        if "no-eval" not in script:
-            ok = test_eval(name, script)
-        else:
-            print("\033[93m[  XX  ]\033[0m ", end="\r\n")
+        result = (None, None, None)
+    if not suppress_ok or not result[2]:
+        print(
+            f"{name:<25}{print_value(result[0])} {print_value(result[1])} {print_value(result[2])}"
+        )
     if compiler_output:
         print_file(f"{name}.cth", f"Test program {name}.cth")
         print_file(f".cathode/{name}.out", "Compiler output")
         print_file(f".cathode/{name}.ssa", "QBE program")
 
-    return ok
+    return result
 
 
-def run_tests(names, break_on_failure):
+def run_tests(names, break_on_failure, suppress_ok):
     print("                         Comptime Compiled   Eval")
     print("===================================================")
     for n in names:
-        if not test_script(n, False) and break_on_failure:
+        if not test_script(n, False, suppress_ok)[2] and break_on_failure:
             break
 
 
 def run_one_test(name, verbose=False):
     print("                         Comptime Compiled   Eval")
     print("===================================================")
-    test_script(name, verbose)
+    test_script(name, verbose, False)
 
 
 def load_test_names():
@@ -211,8 +222,8 @@ def load_test_names():
     return scripts
 
 
-def run_all_tests(break_on_failure):
-    run_tests(load_test_names(), break_on_failure)
+def run_all_tests(break_on_failure: bool = False, suppress_ok: bool = False):
+    run_tests(load_test_names(), break_on_failure, suppress_ok)
 
 
 def config_test(name, *args):
@@ -359,6 +370,13 @@ run_all.add_argument(
     help="Break on test failure",
 )
 
+run_all.add_argument(
+    "-s",
+    "--suppress-ok",
+    action="store_true",
+    help="Suppress output for successful tests",
+)
+
 run_one = subparsers.add_parser(
     "one",
     help="Execute one single test, dumping compiler output on failure",
@@ -387,6 +405,13 @@ run_some.add_argument(
     "--break-on-failure",
     action="store_true",
     help="Break on test failure",
+)
+
+run_some.add_argument(
+    "-s",
+    "--suppress-ok",
+    action="store_true",
+    help="Suppress output for successful tests",
 )
 
 run_some.add_argument(
@@ -452,13 +477,13 @@ nuke = subparsers.add_parser(
 args = arg_parser.parse_args()
 
 if args.cmd == "all":
-    run_all_tests(args.break_on_failure)
+    run_all_tests(args.break_on_failure, args.suppress_ok)
 if args.cmd == "make":
     build_compiler()
 if args.cmd == "one":
     run_one_test(args.test[0], args.verbose)
 if args.cmd == "some":
-    run_tests(args.test, args.break_on_failure)
+    run_tests(args.test, args.break_on_failure, args.suppress_ok)
 if args.cmd == "create":
     config_test(args.test[0], *args.test[1:])
 if args.cmd == "add-all":
